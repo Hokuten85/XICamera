@@ -7,7 +7,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "addons", "addons", "{715D06
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "XICamera.Core", "XICamera.Core\XICamera.Core.vcxproj", "{B6984137-E257-4582-8B3C-7CD810F37C50}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "XICamera.Windower", "XICamera.Windower\XICamera.Windower\XICamera.Windower.vcxproj", "{3F3459D0-0179-475E-BC5E-0E96E4F6195C}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "XICamera.Windower", "XICamera.Windower\XICamera.Windower.vcxproj", "{3F3459D0-0179-475E-BC5E-0E96E4F6195C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

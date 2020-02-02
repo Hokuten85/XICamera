@@ -30,7 +30,7 @@
     <None Include="module\exports.def" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\XICamera.Core\XICamera.Core.vcxproj">
+    <ProjectReference Include="..\XICamera.Core\XICamera.Core.vcxproj">
       <Project>{b6984137-e257-4582-8b3c-7cd810f37c50}</Project>
     </ProjectReference>
   </ItemGroup>
