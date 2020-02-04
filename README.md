@@ -4,7 +4,7 @@ XICamera is an addon that allows to change the camera distance.
 
 ## Compatibility
 
-XIPivot works together with [Ashita v3](https://www.ashitaxi.com) as well as [Windower 4](http://www.windower.net).
+XICamera works together with [Ashita v3](https://www.ashitaxi.com) as well as [Windower 4](http://www.windower.net).
 
 ## Installation
 
