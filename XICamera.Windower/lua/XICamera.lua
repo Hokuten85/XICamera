@@ -37,8 +37,9 @@ require('lists')
 
 -- package.cpath somehow doesn't appreciate backslashes
 local addon_path = windower.addon_path:gsub('\\', '/')
-defaults = T{}
---defaults.root_path = root_path
+defaults = T{
+    cameraDistance = 5
+}
 
 settings = config.load(defaults)
 config.save(settings, 'all')
@@ -62,8 +63,7 @@ windower.register_event('addon command', function(command, ...)
 
 	if command == 'help' or command == 'h' then
 		windower.add_to_chat(8, _addon.name .. ' v.' .. _addon.version)
-		windower.add_to_chat(8, '   add overlay_dir - Adds a path to be searched for DAT overlays')
-		windower.add_to_chat(8, '   remove overlay_dir - Removes a path from the DAT overlays')
+		windower.add_to_chat(8, '   d|distance # - sets the camera distance')
 		windower.add_to_chat(8, '   status - Print status and diagnostic info')
 
 	elseif command == 'distance' or command == 'd' then
@@ -72,39 +72,22 @@ windower.register_event('addon command', function(command, ...)
 			return
 		end
 
-		if _XICamera.set_camera_distance(args[1]) > 0 then
-            -- do stuff on successful set
+		if _XICamera.set_camera_distance(tonumber(args[1])) > 0 then
+            windower.add_to_chat(8, 'set camera distance to "' .. tonumber(args[1]) .. '"')
+            settings.cameraDistance = tonumber(args[1])
+			config.save(settings)
 		else
 			windower.add_to_chat(8, 'failed to change distance "' .. args[1] .. '"')
 		end
-	-- elseif command == 'remove' or command == 'r' then
-		-- if not args[1] then
-			-- error('Invalid syntax: //pivot remove <relative overlay path>')
-			-- return
-		-- end
-
-		-- _XIPivot.remove_overlay(args[1])
-		-- for i,path in ipairs(settings.overlays) do
-			-- if path == args[1] then
-				-- list.remove(settings.overlays, i)
-				-- break
-			-- end
-		-- end
-		-- config.save(settings)
-
-	-- elseif command == 'status' or command == 's' then
-		-- local stats = _XIPivot.diagnostics()
-		-- windower.add_to_chat(127,'- diagnostics')
-		-- if stats['enabled'] then
-			-- windower.add_to_chat(127, '-  enabled  : true')
-		-- else
-			-- windower.add_to_chat(127'-  enabled  : false')
-		-- end
-		-- windower.add_to_chat(127, '-  root_path: "' .. stats['root_path'] .. '"')
-		-- windower.add_to_chat(127, '-  overlays :')
-		-- for prio, path in ipairs(stats['overlays']) do
-			-- windower.add_to_chat(127, '-      [' .. prio .. ']: ' .. path)
-		-- end
+	elseif command == 'status' or command == 's' then
+		local stats = _XICamera.diagnostics()
+		windower.add_to_chat(127,'- diagnostics')
+		if stats['enabled'] then
+			windower.add_to_chat(127, '-  enabled  : true')
+		else
+			windower.add_to_chat(127'-  enabled  : false')
+		end
+		windower.add_to_chat(127, '-  cameraDistance: "' .. stats['cameraDistance'] .. '"')
 	end
 end)
 

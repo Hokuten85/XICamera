@@ -1,35 +1,32 @@
 ## About
 
-XICamera is an addon that allows to change the camera distance.
+XICamera is a plugin that allows to change the camera distance.
 
 ## Setup
 
-- 1) Copy the XICamera folder into your Windower addons folder.
-- 2) (Optional) Edit `data/settings.xml`:
-   - change the default camera distance. Distance will be defaulted to 5 if no setting is specified.
+- 1) Copy the `XICamera.dll` into Ashita's `plugins/` directory.
+- 2) Copy `XICamera.sample.xml` to Ashita's `config/` directory and rename it to `XICamera.xml`
+- 3) Add `/load xicamera` to your setup script
 
-settings.xml:
+XICamera.xml:
 
 ```xml
-<?xml version="1.1" ?>
+<?xml version="1.0" encoding="UTF-8"?>
 <settings>
-    <global>
-	<cameraDistance>5</cameraDistance>
-    </global>
+    <setting name="cameraDistance">5</setting>
 </settings>
 ```
-
 ## In-Game commands
 
-XICamera makes the in-game command `//camera` or `//cam` available to adjust camera distance on the fly.
+XICamera makes the in-game command `/camera` available to change the camera distance at runtime.
+
 The following parameters are supported:
 
 - d/distance #     -- will change the camera distance
-- s/status               -- dumps XICamera's global status
 - h/help                 -- print this text
 
-These commands all support a short first letter version (d/s/h).
-Changes made with distance will be reflected in `settings.xml`.
+These commands all support a short first letter version (d/h).
+Changes made with distance will be reflected in `XIPivot.xml`.
 
 ## Limitations
 

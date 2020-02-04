@@ -13,28 +13,22 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="Source Files\lua">
-      <UniqueIdentifier>{76b895ba-77e5-4c9d-82f5-aacc330b1f4d}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <None Include="module\exports.def">
+    <None Include="plugin\exports.def">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="lua\XICamera.lua">
-      <Filter>Source Files\lua</Filter>
-    </None>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\WindowerInterface.h">
+    <ClInclude Include="plugin\AshitaInterface.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\lua_module.cpp">
+    <ClCompile Include="plugin\AshitaInterface.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\Windowerinterface.cpp">
+    <ClCompile Include="plugin\plugin.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

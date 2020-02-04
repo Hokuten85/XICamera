@@ -26,7 +26,7 @@ namespace XICamera
 			/* toggle debug logging on/off */
 			void setDebugLog(bool state);
 
-			void setCameraDistance(const int& newDistance);
+			bool setCameraDistance(const int& newDistance);
 			const int& cameraDistance(void) const { return m_cameraDistance; }
 
 		public:

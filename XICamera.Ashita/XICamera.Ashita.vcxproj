@@ -18,27 +18,10 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
-  <ItemGroup>
-    <None Include="lua\XICamera.lua" />
-    <None Include="module\exports.def" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\XICamera.Core\XICamera.Core.vcxproj">
-      <Project>{b6984137-e257-4582-8b3c-7cd810f37c50}</Project>
-    </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="src\WindowerInterface.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="src\lua_module.cpp" />
-    <ClCompile Include="src\Windowerinterface.cpp" />
-  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
-    <ProjectGuid>{3F3459D0-0179-475E-BC5E-0E96E4F6195C}</ProjectGuid>
-    <Keyword>Win32Proj</Keyword>
-    <RootNamespace>XICameraWindower</RootNamespace>
+    <ProjectGuid>{A9F71601-3B89-4D8D-8F5D-358038F3B815}</ProjectGuid>
+    <RootNamespace>XICameraAshita</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -56,17 +39,17 @@
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v142</PlatformToolset>
-    <CharacterSet>Unicode</CharacterSet>
+    <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v142</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>Unicode</CharacterSet>
+    <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -87,129 +70,116 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)build\_lib\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)build\_tmp\$(ProjectName)\$(Configuration)\</IntDir>
-    <TargetName>_XICamera</TargetName>
+    <TargetName>XICameraDev</TargetName>
     <ExecutablePath>$(VC_ExecutablePath_x86);$(WindowsSDK_ExecutablePath);$(VS_ExecutablePath);$(MSBuild_ExecutablePath);$(SystemRoot)\SysWow64;$(FxCopDir);$(PATH);</ExecutablePath>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LinkIncremental>true</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)build\_lib\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)build\_tmp\$(ProjectName)\$(Configuration)\</IntDir>
-    <TargetName>_XICamera</TargetName>
+    <TargetName>XICamera</TargetName>
     <ExecutablePath>$(VC_ExecutablePath_x86);$(WindowsSDK_ExecutablePath);$(VS_ExecutablePath);$(MSBuild_ExecutablePath);$(SystemRoot)\SysWow64;$(FxCopDir);$(PATH);</ExecutablePath>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;XICAMERAWINDOWER_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(SolutionDir)XICamera.Core;$(SolutionDir)3rdParty\SDKs\Windower\LUA;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <UseFullPaths>false</UseFullPaths>
+      <ConformanceMode>false</ConformanceMode>
+      <AdditionalIncludeDirectories>$(SolutionDir)XICamera.Core\;$(SolutionDir)3rdParty\SDKs\Ashita\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_DEBUG;XICAMERAASHITA_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <UseFullPaths>true</UseFullPaths>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <EnableUAC>true</EnableUAC>
-      <ModuleDefinitionFile>module\exports.def</ModuleDefinitionFile>
-      <AdditionalDependencies>$(SolutionDir)3rdParty\SDKs\Windower\LuaCore_exports.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <ModuleDefinitionFile>plugin\exports.def</ModuleDefinitionFile>
     </Link>
     <PreBuildEvent>
       <Command>echo "Ignore the following 'File not found' error"
-rmdir /S /Q "$(SolutionDir)build\$(Configuration)\Windower"</Command>
+rmdir /S /Q "$(SolutionDir)build\$(Configuration)\Ashita"</Command>
     </PreBuildEvent>
     <PreBuildEvent>
-      <Message>Clean previous Post-Build output</Message>
+      <Message>Clean up old Post-Build results</Message>
     </PreBuildEvent>
     <PostBuildEvent>
-      <Command>xcopy /E /I /Y /Q "$(ProjectDir)lua" "$(SolutionDir)build\$(Configuration)\Windower\XICamera"
-xcopy /Y /Q "$(OutDir)$(TargetName)$(TargetExt)" "$(SolutionDir)build\$(Configuration)\Windower\XICamera\libs\$(TargetName)$(TargetExt)*"</Command>
-    </PostBuildEvent>
-    <PostBuildEvent>
-      <Message>copy the build results to a Windower addon-bundle</Message>
+      <Command>xcopy /E /I /Y /Q "$(ProjectDir)resources" "$(SolutionDir)build\$(Configuration)\Ashita"
+xcopy /Y /Q "$(OutDir)$(TargetName)$(TargetExt)" "$(SolutionDir)build\$(Configuration)\Ashita\plugins\$(TargetName)$(TargetExt)*"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
-      <PrecompiledHeader>Use</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;XICAMERAWINDOWER_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <EnableUAC>false</EnableUAC>
+      <SubSystem>Console</SubSystem>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;XICAMERAWINDOWER_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(SolutionDir)XICamera.Core;$(SolutionDir)3rdParty\SDKs\Windower\LUA;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ConformanceMode>false</ConformanceMode>
+      <AdditionalIncludeDirectories>$(SolutionDir)XICamera.Core\;$(SolutionDir)3rdParty\SDKs\Ashita\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;XICAMERAASHITA_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <UseFullPaths>false</UseFullPaths>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <EnableUAC>false</EnableUAC>
-      <AdditionalDependencies>$(SolutionDir)3rdParty\SDKs\Windower\LuaCore_exports.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <ModuleDefinitionFile>plugin\exports.def</ModuleDefinitionFile>
     </Link>
     <PreBuildEvent>
       <Command>echo "Ignore the following 'File not found' error"
-rmdir /S /Q "$(SolutionDir)build\$(Configuration)\Windower"</Command>
-      <Message>Clean previous Post-Build output</Message>
+rmdir /S /Q "$(SolutionDir)build\$(Configuration)\Ashita"</Command>
+    </PreBuildEvent>
+    <PreBuildEvent>
+      <Message>Clean up old Post-Build results</Message>
     </PreBuildEvent>
     <PostBuildEvent>
-      <Command>xcopy /E /I /Y /Q "$(ProjectDir)lua" "$(SolutionDir)build\$(Configuration)\Windower\XICamera"
-xcopy /Y /Q "$(OutDir)$(TargetName)$(TargetExt)" "$(SolutionDir)build\$(Configuration)\Windower\XICamera\libs\$(TargetName)$(TargetExt)*"</Command>
-    </PostBuildEvent>
-    <PostBuildEvent>
-      <Message>copy the build results to a Windower addon-bundle</Message>
+      <Command>xcopy /E /I /Y /Q "$(ProjectDir)resources" "$(SolutionDir)build\$(Configuration)\Ashita"
+xcopy /Y /Q "$(OutDir)$(TargetName)$(TargetExt)" "$(SolutionDir)build\$(Configuration)\Ashita\plugins\$(TargetName)$(TargetExt)*"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
-      <PrecompiledHeader>Use</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;XICAMERAWINDOWER_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
+      <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <EnableUAC>false</EnableUAC>
     </Link>
   </ItemDefinitionGroup>
+  <ItemGroup>
+    <None Include="plugin\exports.def" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="plugin\AshitaInterface.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="plugin\AshitaInterface.cpp" />
+    <ClCompile Include="plugin\plugin.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\XICamera.Core\XICamera.Core.vcxproj">
+      <Project>{b6984137-e257-4582-8b3c-7cd810f37c50}</Project>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

@@ -82,7 +82,7 @@ namespace XICamera
 		lua_setfield(L, -2, "enabled");
 
 		lua_pushnumber(L, instance().cameraDistance());
-		lua_setfield(L, -2, "root_path");
+		lua_setfield(L, -2, "cameraDistance");
 
 		return 1;
 	}

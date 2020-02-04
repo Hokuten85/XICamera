@@ -164,11 +164,13 @@ namespace XICamera
 			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_logDebug = %s", state ? "Debug" : "Discard");
 		}
 
-		void Redirector::setCameraDistance(const int &newDistance)
+		bool Redirector::setCameraDistance(const int &newDistance)
 		{
 			g_cameraDistance = newDistance;
 			m_cameraDistance = newDistance;
 			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_cameraDistance = '%d'", m_cameraDistance);
+
+			return true;
 		}
 	}
 }

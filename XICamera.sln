@@ -9,6 +9,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "XICamera.Core", "XICamera.C
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "XICamera.Windower", "XICamera.Windower\XICamera.Windower.vcxproj", "{3F3459D0-0179-475E-BC5E-0E96E4F6195C}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "XICamera.Ashita", "XICamera.Ashita\XICamera.Ashita.vcxproj", "{A9F71601-3B89-4D8D-8F5D-358038F3B815}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -33,12 +35,21 @@ Global
 		{3F3459D0-0179-475E-BC5E-0E96E4F6195C}.Release|x64.Build.0 = Release|x64
 		{3F3459D0-0179-475E-BC5E-0E96E4F6195C}.Release|x86.ActiveCfg = Release|Win32
 		{3F3459D0-0179-475E-BC5E-0E96E4F6195C}.Release|x86.Build.0 = Release|Win32
+		{A9F71601-3B89-4D8D-8F5D-358038F3B815}.Debug|x64.ActiveCfg = Debug|x64
+		{A9F71601-3B89-4D8D-8F5D-358038F3B815}.Debug|x64.Build.0 = Debug|x64
+		{A9F71601-3B89-4D8D-8F5D-358038F3B815}.Debug|x86.ActiveCfg = Debug|Win32
+		{A9F71601-3B89-4D8D-8F5D-358038F3B815}.Debug|x86.Build.0 = Debug|Win32
+		{A9F71601-3B89-4D8D-8F5D-358038F3B815}.Release|x64.ActiveCfg = Release|x64
+		{A9F71601-3B89-4D8D-8F5D-358038F3B815}.Release|x64.Build.0 = Release|x64
+		{A9F71601-3B89-4D8D-8F5D-358038F3B815}.Release|x86.ActiveCfg = Release|Win32
+		{A9F71601-3B89-4D8D-8F5D-358038F3B815}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{3F3459D0-0179-475E-BC5E-0E96E4F6195C} = {715D06C9-9D87-4159-9C3A-A643BCB5DDBE}
+		{A9F71601-3B89-4D8D-8F5D-358038F3B815} = {715D06C9-9D87-4159-9C3A-A643BCB5DDBE}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {E7E72D03-13F2-4838-928A-1AA6B39345CD}
