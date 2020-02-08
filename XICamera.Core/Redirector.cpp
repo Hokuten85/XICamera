@@ -10,9 +10,12 @@ namespace XICamera
 	{
 		Redirector* Redirector::s_instance = nullptr;
 
-		DWORD g_CameraPositoinReturnAddress; // Camera return address to allow the code cave to return properly.
+		DWORD g_CameraPositionReturnAddress; // Camera return address to allow the code cave to return properly.
 		DWORD g_CameraAddress; // Camera address to identify where to start injecting.
-		int g_cameraDistance = 5;
+		DWORD g_CameraSpeedReturnAddress; // Camera Speed return address to allow the code cave to return properly.
+		DWORD g_SpeedAddress; // Camera Speed address to identify where to start injecting.
+		int g_cameraDistance = 6;
+		float g_cameraMoveSpeed = 0.0f;
 
 		Redirector& Redirector::instance(void)
 		{
@@ -26,7 +29,8 @@ namespace XICamera
 		Redirector::Redirector()
 			: m_redirectSet(false)
 		{
-			m_cameraDistance = 5;
+			m_redirectSet = false;
+			g_cameraDistance = 6;
 			m_logger = DummyLogProvider::instance();
 		}
 
@@ -49,23 +53,23 @@ namespace XICamera
 		 */
 		__declspec(naked) void CalcCameraPosition(void)
 		{
-			__asm fstp dword ptr [esi + 0x4C];
-			__asm fstp st(0);
+			__asm fadd dword ptr [edi + 0x48];
+			__asm fstp dword ptr [edi + 0x48];
 
-			__asm fld dword ptr [esi + 0x44];
-			__asm fsubr dword ptr [esi + 0x50];
+			__asm fld dword ptr [edi + 0x44];
+			__asm fsubr dword ptr [edi + 0x50];
 			__asm fld st(0);
 			__asm fmulp st(1), st(0);
 
-			__asm fld dword ptr [esi + 0x48];
-			__asm fsubr dword ptr [esi + 0x54];
+			__asm fld dword ptr [edi + 0x48];
+			__asm fsubr dword ptr [edi + 0x54];
 			__asm fld st(0);
 			__asm fmulp st(1), st(0);
 
 			__asm faddp st(1), st(0);
 
-			__asm fld dword ptr [esi + 0x4C];
-			__asm fsubr dword ptr [esi + 0x58];
+			__asm fld dword ptr [edi + 0x4C];
+			__asm fsubr dword ptr [edi + 0x58];
 			__asm fld st(0);
 			__asm fmulp st(1), st(0);
 
@@ -75,34 +79,49 @@ namespace XICamera
 
 			__asm push g_cameraDistance;
 
-			__asm fld dword ptr [esi + 0x44];
-			__asm fsub dword ptr [esi + 0x50];
+			__asm fld dword ptr [edi + 0x44];
+			__asm fsub dword ptr [edi + 0x50];
 			__asm fdiv st(0), st(1);
 			__asm fild [esp];
 			__asm fmulp st(1), st(0);
-			__asm fadd dword ptr [esi + 0x50];
-			__asm fstp dword ptr [esi + 0x44];
+			__asm fadd dword ptr [edi + 0x50];
+			__asm fstp dword ptr [edi + 0x44];
 
-			__asm fld dword ptr [esi + 0x48];
-			__asm fsub dword ptr [esi + 0x54];
+			__asm fld dword ptr [edi + 0x48];
+			__asm fsub dword ptr [edi + 0x54];
 			__asm fdiv st(0), st(1);
 			__asm fild [esp];
 			__asm fmulp st(1), st(0);
-			__asm fadd dword ptr [esi + 0x54];
-			__asm fstp dword ptr [esi + 0x48];
+			__asm fadd dword ptr [edi + 0x54];
+			__asm fstp dword ptr [edi + 0x48];
 
-			__asm fld dword ptr [esi + 0x4C];
-			__asm fsub dword ptr [esi + 0x58];
+			__asm fld dword ptr [edi + 0x4C];
+			__asm fsub dword ptr [edi + 0x58];
 			__asm fdiv st(0), st(1);
 			__asm fild [esp];
 			__asm fmulp st(1), st(0);
-			__asm fadd dword ptr [esi + 0x58];
-			__asm fstp dword ptr [esi + 0x4C];
+			__asm fadd dword ptr [edi + 0x58];
+			__asm fstp dword ptr [edi + 0x4C];
 			__asm fstp st(0);
 
 			__asm add esp, 4;
 
-			__asm jmp g_CameraPositoinReturnAddress;
+			__asm jmp g_CameraPositionReturnAddress;
+		}
+
+		/**
+		 * @brief Camera Speed fix codecave.
+		 */
+		__declspec(naked) void CameraSpeed(void)
+		{
+			__asm push g_cameraMoveSpeed;
+			__asm fadd dword ptr [esp];
+			__asm add esp, 4;
+
+			__asm fmul dword ptr [esp + 0x24];
+			__asm mov edx, [esi];
+
+			__asm jmp g_CameraSpeedReturnAddress;
 		}
 
 
@@ -113,18 +132,38 @@ namespace XICamera
 				m_redirectSet = true;
 
 				// redirect set logic here
-				g_CameraAddress = (DWORD)XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD9\x5E\x4C\xDD\xD8\xE8", "xxxxxx");
+				g_CameraAddress = (DWORD)XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD8\x47\x48\xD9\x5F\x48\xE8", "xxxxxxx");
 				if (g_CameraAddress == 0)
 				{
+					m_redirectSet = false;
 					// REPORT FAILURE
-					//xiloader::console::output(xiloader::color::error, "Failed to locate main hairpin hack address!");
-					//return 0;
+					m_logger->logMessage(ILogProvider::LogLevel::Info, "could not find camera position");
+					return 0;
 				}
 				auto caveDest = ((int)CalcCameraPosition - ((int)g_CameraAddress)) - 5;
-				g_CameraPositoinReturnAddress = g_CameraAddress + 0x05;
+				g_CameraPositionReturnAddress = g_CameraAddress + 0x06;
 
 				*(BYTE*)(g_CameraAddress + 0x00) = 0xE9; // jmp
 				*(UINT*)(g_CameraAddress + 0x01) = caveDest;
+				*(BYTE*)(g_CameraAddress + 0x05) = 0x90; // nop
+
+				m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_redirectSet = %s", m_redirectSet ? "true" : "false");
+
+
+				g_SpeedAddress = (DWORD)XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD8\x4C\x24\x24\x8B\x16\x8B\xCE\xD8\x0D", "xxxxxxxxxx");
+				if (g_SpeedAddress == 0)
+				{
+					m_redirectSet = false;
+					// REPORT FAILURE
+					m_logger->logMessage(ILogProvider::LogLevel::Info, "could not find camera position");
+					return 0;
+				}
+				auto caveSpeedDest = ((int)CameraSpeed - ((int)g_SpeedAddress)) - 5;
+				g_CameraSpeedReturnAddress = g_SpeedAddress + 0x06;
+
+				*(BYTE*)(g_SpeedAddress + 0x00) = 0xE9; // jmp
+				*(UINT*)(g_SpeedAddress + 0x01) = caveSpeedDest;
+				*(BYTE*)(g_SpeedAddress + 0x05) = 0x90; //nop
 
 				m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_redirectSet = %s", m_redirectSet ? "true" : "false");
 
@@ -137,25 +176,29 @@ namespace XICamera
 
 		bool Redirector::removeRedirect(void)
 		{
-			if (m_redirectSet == true)
+			m_redirectSet = false;
+			if (g_CameraAddress != 0)
 			{
-				m_redirectSet = false;
-
-				if (g_CameraAddress != 0)
-				{
-					*(BYTE*)(g_CameraAddress + 0x00) = 0xD9;
-					*(BYTE*)(g_CameraAddress + 0x01) = 0x5E;
-					*(BYTE*)(g_CameraAddress + 0x02) = 0x4C;
-					*(BYTE*)(g_CameraAddress + 0x03) = 0xDD;
-					*(BYTE*)(g_CameraAddress + 0x04) = 0xD8;
-				}
-
-				m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_redirectSet = %s", m_redirectSet ? "true" : "false");
-				return m_redirectSet;
+				*(BYTE*)(g_CameraAddress + 0x00) = 0xD8;
+				*(BYTE*)(g_CameraAddress + 0x01) = 0x47;
+				*(BYTE*)(g_CameraAddress + 0x02) = 0x48;
+				*(BYTE*)(g_CameraAddress + 0x03) = 0xD9;
+				*(BYTE*)(g_CameraAddress + 0x04) = 0x5F;
+				*(BYTE*)(g_CameraAddress + 0x05) = 0x48;
 			}
 
-			m_logger->logMessage(m_logDebug, "redirect already removed");
-			return false;
+			if (g_SpeedAddress != 0)
+			{
+				*(BYTE*)(g_SpeedAddress + 0x00) = 0xD8;
+				*(BYTE*)(g_SpeedAddress + 0x01) = 0x4C;
+				*(BYTE*)(g_SpeedAddress + 0x02) = 0x24;
+				*(BYTE*)(g_SpeedAddress + 0x03) = 0x24;
+				*(BYTE*)(g_SpeedAddress + 0x04) = 0x8B;
+				*(BYTE*)(g_SpeedAddress + 0x05) = 0x16;
+			}
+
+			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_redirectSet = %s", m_redirectSet ? "true" : "false");
+			return m_redirectSet;
 		}
 
 		void Redirector::setDebugLog(bool state)
@@ -168,6 +211,8 @@ namespace XICamera
 		{
 			g_cameraDistance = newDistance;
 			m_cameraDistance = newDistance;
+
+			g_cameraMoveSpeed = newDistance / 10.0f;
 			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_cameraDistance = '%d'", m_cameraDistance);
 
 			return true;
