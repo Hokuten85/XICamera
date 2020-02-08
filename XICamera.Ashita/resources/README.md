@@ -30,11 +30,9 @@ Changes made with distance will be reflected in `XIPivot.xml`.
 
 ## Limitations
 
-There are some small differences in how the camera will behave.
+Normal camera behavior will very slightly depending on character movement. While the addon is on, the camera's ability to automatically trail behind you diminishes. You will stay in frame, but the camera doesn't swing behind you in the direction that you are running.
 
-Normal camera behavior will very slightly depending on character movement. For instance, you can notice a subtle increase in camera when beginning to run, and a subtle decrease in distance when stopping.
-
-While the addon is on, the camera will always remain at the specified distance. As you move the camera distance further out, the rate that you can pan the camera up and down decreases. The camera's ability to automatically trail behind you also diminishes. You will stay in frame, but the camera doesn't swing behind you in the direction that you are running.
+Camera distances greater than 45 do not work very well and I'm not sure why yet. I'm not preventing you from setting higher than 45 as you can still get some cool visuals if you can manage to get the camera to stabilize. Running seems to help.
 
 ## Disclaimer
 
