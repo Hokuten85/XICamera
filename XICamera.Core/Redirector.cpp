@@ -14,6 +14,8 @@ namespace XICamera
 		DWORD g_CameraAddress; // Camera address to identify where to start injecting.
 		DWORD g_CameraSpeedReturnAddress; // Camera Speed return address to allow the code cave to return properly.
 		DWORD g_SpeedAddress; // Camera Speed address to identify where to start injecting.
+		DWORD g_MaxCameraAddress; // Camera Max distance address to identify where to start injecting.
+		DWORD g_MaxCameraBattleAddress; // Camera Max distance in Battle address to identify where to start injecting.
 		int g_cameraDistance = 6;
 		float g_cameraMoveSpeed = 0.0f;
 
@@ -79,6 +81,10 @@ namespace XICamera
 
 			__asm push g_cameraDistance;
 
+			__asm fild [esp];
+			__asm fcomip st(0), st(1);
+			__asm jb done_distance;
+
 			__asm fld dword ptr [edi + 0x44];
 			__asm fsub dword ptr [edi + 0x50];
 			__asm fdiv st(0), st(1);
@@ -102,8 +108,9 @@ namespace XICamera
 			__asm fmulp st(1), st(0);
 			__asm fadd dword ptr [edi + 0x58];
 			__asm fstp dword ptr [edi + 0x4C];
-			__asm fstp st(0);
 
+			__asm done_distance:;
+			__asm fstp st(0);
 			__asm add esp, 4;
 
 			__asm jmp g_CameraPositionReturnAddress;
@@ -167,6 +174,22 @@ namespace XICamera
 
 				m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_redirectSet = %s", m_redirectSet ? "true" : "false");
 
+				g_MaxCameraAddress = (DWORD)XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\x00\x00\xC0\x40\xCE\xC1\xE4\x3C", "xxxxxxxx");
+				if (g_MaxCameraAddress != 0)
+				{
+					DWORD dwProtect;
+					VirtualProtect((void*)g_MaxCameraAddress, 4, PAGE_READWRITE, &dwProtect);
+					*(FLOAT*)(g_MaxCameraAddress) = g_cameraDistance;
+				}
+
+				g_MaxCameraBattleAddress = (DWORD)XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\x9A\x99\x09\x41\x66\x66\xE6\x40", "xxxxxxxx");
+				if (g_MaxCameraBattleAddress != 0)
+				{
+					DWORD dwProtect;
+					VirtualProtect((void*)g_MaxCameraBattleAddress, 4, PAGE_READWRITE, &dwProtect);
+					*(FLOAT*)(g_MaxCameraBattleAddress) = g_cameraDistance / 0.24f;
+				}
+
 				return m_redirectSet;
 			}
 
@@ -197,6 +220,16 @@ namespace XICamera
 				*(BYTE*)(g_SpeedAddress + 0x05) = 0x16;
 			}
 
+			if (g_MaxCameraAddress != 0)
+			{
+				*(FLOAT*)(g_MaxCameraAddress) = 6.0f;
+			}
+
+			if (g_MaxCameraBattleAddress != 0)
+			{
+				*(FLOAT*)(g_MaxCameraBattleAddress) = 8.6f;
+			}
+
 			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_redirectSet = %s", m_redirectSet ? "true" : "false");
 			return m_redirectSet;
 		}
@@ -213,6 +246,17 @@ namespace XICamera
 			m_cameraDistance = newDistance;
 
 			g_cameraMoveSpeed = newDistance / 10.0f;
+
+			if (g_MaxCameraAddress != 0)
+			{
+				*(FLOAT*)(g_MaxCameraAddress) = g_cameraDistance;
+			}
+
+			if (g_MaxCameraBattleAddress != 0)
+			{
+				*(FLOAT*)(g_MaxCameraBattleAddress) = g_cameraDistance / 0.24f;
+			}
+
 			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_cameraDistance = '%d'", m_cameraDistance);
 
 			return true;
