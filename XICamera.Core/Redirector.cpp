@@ -180,6 +180,7 @@ namespace XICamera
 					DWORD dwProtect;
 					VirtualProtect((void*)g_MaxCameraAddress, 4, PAGE_READWRITE, &dwProtect);
 					*(FLOAT*)(g_MaxCameraAddress) = g_cameraDistance;
+					VirtualProtect((void*)g_MaxCameraAddress, 4, dwProtect, new DWORD);
 				}
 
 				g_MaxCameraBattleAddress = (DWORD)XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\x9A\x99\x09\x41\x66\x66\xE6\x40", "xxxxxxxx");
@@ -188,6 +189,7 @@ namespace XICamera
 					DWORD dwProtect;
 					VirtualProtect((void*)g_MaxCameraBattleAddress, 4, PAGE_READWRITE, &dwProtect);
 					*(FLOAT*)(g_MaxCameraBattleAddress) = g_cameraDistance / 0.24f;
+					VirtualProtect((void*)g_MaxCameraBattleAddress, 4, dwProtect, new DWORD);
 				}
 
 				return m_redirectSet;
@@ -222,12 +224,18 @@ namespace XICamera
 
 			if (g_MaxCameraAddress != 0)
 			{
+				DWORD dwProtect;
+				VirtualProtect((void*)g_MaxCameraAddress, 4, PAGE_READWRITE, &dwProtect);
 				*(FLOAT*)(g_MaxCameraAddress) = 6.0f;
+				VirtualProtect((void*)g_MaxCameraAddress, 4, dwProtect, new DWORD);
 			}
 
 			if (g_MaxCameraBattleAddress != 0)
 			{
+				DWORD dwProtect;
+				VirtualProtect((void*)g_MaxCameraBattleAddress, 4, PAGE_READWRITE, &dwProtect);
 				*(FLOAT*)(g_MaxCameraBattleAddress) = 8.6f;
+				VirtualProtect((void*)g_MaxCameraBattleAddress, 4, dwProtect, new DWORD);
 			}
 
 			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_redirectSet = %s", m_redirectSet ? "true" : "false");
@@ -249,12 +257,18 @@ namespace XICamera
 
 			if (g_MaxCameraAddress != 0)
 			{
+				DWORD dwProtect;
+				VirtualProtect((void*)g_MaxCameraAddress, 4, PAGE_READWRITE, &dwProtect);
 				*(FLOAT*)(g_MaxCameraAddress) = g_cameraDistance;
+				VirtualProtect((void*)g_MaxCameraAddress, 4, dwProtect, new DWORD);
 			}
 
 			if (g_MaxCameraBattleAddress != 0)
 			{
+				DWORD dwProtect;
+				VirtualProtect((void*)g_MaxCameraBattleAddress, 4, PAGE_READWRITE, &dwProtect);
 				*(FLOAT*)(g_MaxCameraBattleAddress) = g_cameraDistance / 0.24f;
+				VirtualProtect((void*)g_MaxCameraBattleAddress, 4, dwProtect, new DWORD);
 			}
 
 			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_cameraDistance = '%d'", m_cameraDistance);

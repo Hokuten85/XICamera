@@ -28,8 +28,8 @@
 
 _addon.name = 'XICamera'
 _addon.author = 'Hokuten'
-_addon.version = '0.4'
-_addon.commands = {'camera','cam'}
+_addon.version = '0.5'
+_addon.commands = {'camera','cam','xicamera','xicam'}
 
 config = require('config')
 require('pack')
@@ -47,10 +47,10 @@ config.save(settings, 'all')
 package.cpath = package.cpath .. ';' .. addon_path .. '/libs/?.dll'
 require('_XICamera')
 
-config.register(settings, function(_settings)
-	_XICamera.disable()
+windower.register_event('load', function()
+    _XICamera.disable()
     _XICamera.set_camera_distance(settings.cameraDistance)
-	_XICamera.enable()
+    _XICamera.enable()
 end)
 
 windower.register_event('unload', function()
@@ -90,10 +90,3 @@ windower.register_event('addon command', function(command, ...)
 		windower.add_to_chat(127, '-  cameraDistance: "' .. stats['cameraDistance'] .. '"')
 	end
 end)
-
-windower.register_event('outgoing chunk', function (id, original, modified, injected, blocked)
-    if id == 0x0E7 then
-        windower.send_command("lua unload xicamera")
-    end
-end)
-
