@@ -1,5 +1,5 @@
 --[[
- 	Copyright © 2019, Renee Koecher
+ 	Copyright © 2019, Kelly Grant-Leanna
  	All rights reserved.
  
  	Redistribution and use in source and binary forms, with or without
@@ -10,7 +10,7 @@
  	* Redistributions in binary form must reproduce the above copyright
  	  notice, this list of conditions and the following disclaimer in the
  	  documentation and/or other materials provided with the distribution.
- 	* Neither the name of XIPivot nor the
+ 	* Neither the name of XICamera nor the
  	  names of its contributors may be used to endorse or promote products
  	  derived from this software without specific prior written permission.
  
@@ -28,7 +28,7 @@
 
 _addon.name = 'XICamera'
 _addon.author = 'Hokuten'
-_addon.version = '0.0.1'
+_addon.version = '0.4'
 _addon.commands = {'camera','cam'}
 
 config = require('config')
@@ -38,7 +38,7 @@ require('lists')
 -- package.cpath somehow doesn't appreciate backslashes
 local addon_path = windower.addon_path:gsub('\\', '/')
 defaults = T{
-    cameraDistance = 5
+    cameraDistance = 6
 }
 
 settings = config.load(defaults)
@@ -49,7 +49,7 @@ require('_XICamera')
 
 config.register(settings, function(_settings)
 	_XICamera.disable()
-
+    _XICamera.set_camera_distance(settings.cameraDistance)
 	_XICamera.enable()
 end)
 
@@ -89,5 +89,11 @@ windower.register_event('addon command', function(command, ...)
 		end
 		windower.add_to_chat(127, '-  cameraDistance: "' .. stats['cameraDistance'] .. '"')
 	end
+end)
+
+windower.register_event('outgoing chunk', function (id, original, modified, injected, blocked)
+    if id == 0x0E7 then
+        windower.send_command("lua unload xicamera")
+    end
 end)
 
