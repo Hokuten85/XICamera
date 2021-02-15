@@ -160,4 +160,4 @@ namespace XICamera
         return InstallFolder;
     }
 
-}; // namespace xiloader
+};

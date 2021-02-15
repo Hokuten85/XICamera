@@ -1,6 +1,0 @@
-
-EXPORTS
-	GetInterfaceVersion
-	CreatePluginInfo
-	CreatePlugin
-

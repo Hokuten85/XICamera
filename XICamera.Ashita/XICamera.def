@@ -1,7 +1,0 @@
-LIBRARY XICamera.dll;
-
-EXPORTS
-	GetInterfaceVersion
-	CreatePluginInfo
-	CreatePlugin
-

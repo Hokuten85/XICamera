@@ -1,0 +1,9 @@
+<package>
+  <name>camera</name>
+  <version>1.0.0.1</version>
+  <type>addon</type>
+  <dependencies>
+    <dependency>settings</dependency>
+    <dependency>math</dependency>
+  </dependencies>
+</package>

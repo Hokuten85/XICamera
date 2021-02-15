@@ -28,7 +28,7 @@
 
 _addon.name = 'XICamera'
 _addon.author = 'Hokuten'
-_addon.version = '0.5'
+_addon.version = '0.6'
 _addon.commands = {'camera','cam','xicamera','xicam'}
 
 config = require('config')
@@ -64,7 +64,7 @@ windower.register_event('addon command', function(command, ...)
 	if command == 'help' or command == 'h' then
 		windower.add_to_chat(8, _addon.name .. ' v.' .. _addon.version)
 		windower.add_to_chat(8, '   d|distance # - sets the camera distance')
-		windower.add_to_chat(8, '   status - Print status and diagnostic info')
+		windower.add_to_chat(8, '   status - Print status')
 
 	elseif command == 'distance' or command == 'd' then
 		if not args[1] then
@@ -89,4 +89,8 @@ windower.register_event('addon command', function(command, ...)
 		end
 		windower.add_to_chat(127, '-  cameraDistance: "' .. stats['cameraDistance'] .. '"')
 	end
+end)
+
+windower.register_event('prerender', function()
+    _XICamera.changeDistance()
 end)

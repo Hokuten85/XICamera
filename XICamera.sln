@@ -9,7 +9,20 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "XICamera.Core", "XICamera.C
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "XICamera.Windower", "XICamera.Windower\XICamera.Windower.vcxproj", "{3F3459D0-0179-475E-BC5E-0E96E4F6195C}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "XICamera.Ashita", "XICamera.Ashita\XICamera.Ashita.vcxproj", "{A9F71601-3B89-4D8D-8F5D-358038F3B815}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Camera", "Camera", "{9887CD1A-66F2-466C-88AC-E8568C338551}"
+	ProjectSection(SolutionItems) = preProject
+		Ashita\Addon\Camera\camera.lua = Ashita\Addon\Camera\camera.lua
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Ashita", "Ashita", "{F930E1E6-C2C6-4F60-B027-6615D5906F83}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Windower5", "Windower5", "{CDCCC132-F79C-42D9-8DAF-F13358EEB395}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Camera", "Camera", "{1E9CEFCA-FB92-4B16-B2C4-AE9590A5A0E2}"
+	ProjectSection(SolutionItems) = preProject
+		addons\Windower5\camera\camera.lua = addons\Windower5\camera\camera.lua
+		addons\Windower5\camera\manifest.xml = addons\Windower5\camera\manifest.xml
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -35,21 +48,16 @@ Global
 		{3F3459D0-0179-475E-BC5E-0E96E4F6195C}.Release|x64.Build.0 = Release|x64
 		{3F3459D0-0179-475E-BC5E-0E96E4F6195C}.Release|x86.ActiveCfg = Release|Win32
 		{3F3459D0-0179-475E-BC5E-0E96E4F6195C}.Release|x86.Build.0 = Release|Win32
-		{A9F71601-3B89-4D8D-8F5D-358038F3B815}.Debug|x64.ActiveCfg = Debug|x64
-		{A9F71601-3B89-4D8D-8F5D-358038F3B815}.Debug|x64.Build.0 = Debug|x64
-		{A9F71601-3B89-4D8D-8F5D-358038F3B815}.Debug|x86.ActiveCfg = Debug|Win32
-		{A9F71601-3B89-4D8D-8F5D-358038F3B815}.Debug|x86.Build.0 = Debug|Win32
-		{A9F71601-3B89-4D8D-8F5D-358038F3B815}.Release|x64.ActiveCfg = Release|x64
-		{A9F71601-3B89-4D8D-8F5D-358038F3B815}.Release|x64.Build.0 = Release|x64
-		{A9F71601-3B89-4D8D-8F5D-358038F3B815}.Release|x86.ActiveCfg = Release|Win32
-		{A9F71601-3B89-4D8D-8F5D-358038F3B815}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{3F3459D0-0179-475E-BC5E-0E96E4F6195C} = {715D06C9-9D87-4159-9C3A-A643BCB5DDBE}
-		{A9F71601-3B89-4D8D-8F5D-358038F3B815} = {715D06C9-9D87-4159-9C3A-A643BCB5DDBE}
+		{9887CD1A-66F2-466C-88AC-E8568C338551} = {F930E1E6-C2C6-4F60-B027-6615D5906F83}
+		{F930E1E6-C2C6-4F60-B027-6615D5906F83} = {715D06C9-9D87-4159-9C3A-A643BCB5DDBE}
+		{CDCCC132-F79C-42D9-8DAF-F13358EEB395} = {715D06C9-9D87-4159-9C3A-A643BCB5DDBE}
+		{1E9CEFCA-FB92-4B16-B2C4-AE9590A5A0E2} = {CDCCC132-F79C-42D9-8DAF-F13358EEB395}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {E7E72D03-13F2-4838-928A-1AA6B39345CD}
