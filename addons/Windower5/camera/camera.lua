@@ -72,6 +72,8 @@ local setPauseOnEvent = function(pauseOnEvent)
         newSetting = true
     elseif pauseOnEvent == 'f' or pauseOnEvent == 'false' then
         newSetting = false
+    elseif pauseOnEvent == nil then
+        newSetting = not options.pauseOnEvent
     end
     
     if newSetting ~= nil then
@@ -79,7 +81,6 @@ local setPauseOnEvent = function(pauseOnEvent)
         settings.save()
         add_text("Pause on event setting changed to " .. tostring(options.pauseOnEvent))
     end
-    
 end
 
 local runOnEvent = function()
@@ -88,7 +89,7 @@ end
 
 local displayHelp = function()
     add_text("Set Distance: </camera|/cam> <distance|d> <###>")
-    add_text("Set Pause on event: </camera|/cam> <t|true|f|false>")
+    add_text("Set Pause on event: </camera|/cam> <pauseonevent> [t|true|f|false]")
     add_text("Start/Stop: </camera|/cam> <start|stop>")
 end
 

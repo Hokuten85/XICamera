@@ -9,19 +9,19 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "XICamera.Core", "XICamera.C
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "XICamera.Windower", "XICamera.Windower\XICamera.Windower.vcxproj", "{3F3459D0-0179-475E-BC5E-0E96E4F6195C}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Camera", "Camera", "{9887CD1A-66F2-466C-88AC-E8568C338551}"
-	ProjectSection(SolutionItems) = preProject
-		addons\Ashita\Camera\camera.lua = addons\Ashita\Camera\camera.lua
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Ashita", "Ashita", "{F930E1E6-C2C6-4F60-B027-6615D5906F83}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Windower5", "Windower5", "{CDCCC132-F79C-42D9-8DAF-F13358EEB395}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Camera", "Camera", "{1E9CEFCA-FB92-4B16-B2C4-AE9590A5A0E2}"
 	ProjectSection(SolutionItems) = preProject
 		addons\Windower5\camera\camera.lua = addons\Windower5\camera\camera.lua
 		addons\Windower5\camera\manifest.xml = addons\Windower5\camera\manifest.xml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Ashita3", "Ashita3", "{855F90DC-3AD6-4785-AC02-A71CBEF77AEE}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Camera", "Camera", "{E0838ABF-4194-41D4-A862-46517263DED7}"
+	ProjectSection(SolutionItems) = preProject
+		addons\Ashita3\Camera\camera.lua = addons\Ashita3\Camera\camera.lua
 	EndProjectSection
 EndProject
 Global
@@ -54,10 +54,10 @@ Global
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{3F3459D0-0179-475E-BC5E-0E96E4F6195C} = {715D06C9-9D87-4159-9C3A-A643BCB5DDBE}
-		{9887CD1A-66F2-466C-88AC-E8568C338551} = {F930E1E6-C2C6-4F60-B027-6615D5906F83}
-		{F930E1E6-C2C6-4F60-B027-6615D5906F83} = {715D06C9-9D87-4159-9C3A-A643BCB5DDBE}
 		{CDCCC132-F79C-42D9-8DAF-F13358EEB395} = {715D06C9-9D87-4159-9C3A-A643BCB5DDBE}
 		{1E9CEFCA-FB92-4B16-B2C4-AE9590A5A0E2} = {CDCCC132-F79C-42D9-8DAF-F13358EEB395}
+		{855F90DC-3AD6-4785-AC02-A71CBEF77AEE} = {715D06C9-9D87-4159-9C3A-A643BCB5DDBE}
+		{E0838ABF-4194-41D4-A862-46517263DED7} = {855F90DC-3AD6-4785-AC02-A71CBEF77AEE}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {E7E72D03-13F2-4838-928A-1AA6B39345CD}

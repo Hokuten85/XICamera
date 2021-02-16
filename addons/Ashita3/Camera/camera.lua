@@ -10,9 +10,22 @@ require 'common'
 local default_config =
 {
     distance    = 6,
-    cameraSpeed = 1.0
+    cameraSpeed = 1.0,
+    pauseOnEvent = true
 };
 local configs = default_config;
+
+local player = GetPlayerEntity();
+local readyToRender = false
+
+local runOnEvent = function()
+    player = GetPlayerEntity();
+    if (player == nil) then
+        return false;
+    end
+    
+    return not (configs.pauseOnEvent and player.Status == 4)
+end
 
 ----------------------------------------------------------------------------------------------------
 -- Variables
@@ -75,27 +88,30 @@ ashita.register_event('load', function()
     
     pointerToCamera = ashita.memory.read_uint32(pointerToCameraPointer + 0x0D);
     if (pointerToCamera == 0) then error('Failed to locate critical signature #3!'); end
+    
+    readyToRender = true
 end);
 
 ashita.register_event('prerender', function()
-    rootCameraAddress = ashita.memory.read_uint32(pointerToCamera);
+    if pointerToCamera ~= 0 and runOnEvent() and readyToRender then
+        rootCameraAddress = ashita.memory.read_uint32(pointerToCamera);
 
-    if rootCameraAddress ~= 0 then
-        local focal_x = ashita.memory.read_float(rootCameraAddress + 0x50)
-        local focal_z = ashita.memory.read_float(rootCameraAddress + 0x54)
-        local focal_y = ashita.memory.read_float(rootCameraAddress + 0x58)
-        
-        local diff_x = ashita.memory.read_float(rootCameraAddress + 0x44) - focal_x
-        local diff_z = ashita.memory.read_float(rootCameraAddress + 0x48) - focal_z
-        local diff_y = ashita.memory.read_float(rootCameraAddress + 0x4C) - focal_y
-        
-        local distance = 1 / math.sqrt(diff_x * diff_x + diff_z * diff_z + diff_y * diff_y) * configs.distance
-        
-        ashita.memory.write_float(rootCameraAddress + 0x44, diff_x * distance + focal_x)
-        ashita.memory.write_float(rootCameraAddress + 0x48, diff_z * distance + focal_z)
-        ashita.memory.write_float(rootCameraAddress + 0x4C, diff_y * distance + focal_y)
+        if rootCameraAddress ~= 0 then
+            local focal_x = ashita.memory.read_float(rootCameraAddress + 0x50)
+            local focal_z = ashita.memory.read_float(rootCameraAddress + 0x54)
+            local focal_y = ashita.memory.read_float(rootCameraAddress + 0x58)
+            
+            local diff_x = ashita.memory.read_float(rootCameraAddress + 0x44) - focal_x
+            local diff_z = ashita.memory.read_float(rootCameraAddress + 0x48) - focal_z
+            local diff_y = ashita.memory.read_float(rootCameraAddress + 0x4C) - focal_y
+            
+            local distance = 1 / math.sqrt(diff_x * diff_x + diff_z * diff_z + diff_y * diff_y) * configs.distance
+            
+            ashita.memory.write_float(rootCameraAddress + 0x44, diff_x * distance + focal_x)
+            ashita.memory.write_float(rootCameraAddress + 0x48, diff_z * distance + focal_z)
+            ashita.memory.write_float(rootCameraAddress + 0x4C, diff_y * distance + focal_y)
+        end
     end
-    
 end);
 
 local setCameraSpeed = function(newSpeed)
@@ -116,8 +132,29 @@ ashita.register_event('command', function(command, ntype)
                 ashita.settings.save(_addon.path .. '/settings/settings.json', configs);
                 print("Distance changed to " .. newDistance)
             end
+        elseif (command_args[2] == 'start')  then
+            readyToRender = true
+        elseif (command_args[2] == 'stop')  then
+            readyToRender = false
+        elseif (command_args[2] == 'pauseonevent')  then
+            local newSetting
+            if command_args[3] == 't' or command_args[3] == 'true' then
+                newSetting = true
+            elseif command_args[3] == 'f' or command_args[3] == 'false' then
+                newSetting = false
+            elseif command_args[3] == nil then
+                newSetting = not configs.pauseOnEvent
+            end
+            
+            if newSetting ~= nil then
+                configs.pauseOnEvent = newSetting
+                ashita.settings.save(_addon.path .. '/settings/settings.json', configs);
+                print("Pause on event setting changed to " .. tostring(configs.pauseOnEvent))
+            end
         elseif (command_args[2] == 'help' or command_args[2] == 'h') then
-            print("Usage: </camera|/cam> <distance|d> <###>")
+            print("Set Distance: </camera|/cam> <distance|d> <###>")
+            print("Set Pause on event: </camera|/cam> <pauseonevent> [t|true|f|false]")
+            print("Start/Stop: </camera|/cam> <start|stop>")
         end
     end
 
