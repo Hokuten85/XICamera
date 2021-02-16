@@ -11,7 +11,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "XICamera.Windower", "XICame
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Camera", "Camera", "{9887CD1A-66F2-466C-88AC-E8568C338551}"
 	ProjectSection(SolutionItems) = preProject
-		Ashita\Addon\Camera\camera.lua = Ashita\Addon\Camera\camera.lua
+		addons\Ashita\Camera\camera.lua = addons\Ashita\Camera\camera.lua
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Ashita", "Ashita", "{F930E1E6-C2C6-4F60-B027-6615D5906F83}"
