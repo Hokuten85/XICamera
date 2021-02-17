@@ -9,19 +9,37 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "XICamera.Core", "XICamera.C
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "XICamera.Windower", "XICamera.Windower\XICamera.Windower.vcxproj", "{3F3459D0-0179-475E-BC5E-0E96E4F6195C}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Windower5", "Windower5", "{CDCCC132-F79C-42D9-8DAF-F13358EEB395}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Ashita3", "Ashita3", "{50E0186C-D9AE-4BF7-A1E1-86C0D1FF24EF}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Camera", "Camera", "{1E9CEFCA-FB92-4B16-B2C4-AE9590A5A0E2}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "addons", "addons", "{11D1CE41-C57E-4D90-A388-0352887A3239}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "camera", "camera", "{65A58087-0187-47D8-BDFC-146FB196D1F1}"
 	ProjectSection(SolutionItems) = preProject
-		addons\Windower5\camera\camera.lua = addons\Windower5\camera\camera.lua
-		addons\Windower5\camera\manifest.xml = addons\Windower5\camera\manifest.xml
+		Ashita3\addons\camera\camera.lua = Ashita3\addons\camera\camera.lua
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Ashita3", "Ashita3", "{855F90DC-3AD6-4785-AC02-A71CBEF77AEE}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Ashita4", "Ashita4", "{7A2C494B-4BEE-46BE-AC37-5DCA05876A5E}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Camera", "Camera", "{E0838ABF-4194-41D4-A862-46517263DED7}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "addons", "addons", "{F78F0FDA-F101-4C8D-A480-09957EF8737B}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "camera", "camera", "{4909A5CA-8C40-4E85-A50E-B4E44218AD10}"
 	ProjectSection(SolutionItems) = preProject
-		addons\Ashita3\Camera\camera.lua = addons\Ashita3\Camera\camera.lua
+		Ashita4\addons\camera\camera.lua = Ashita4\addons\camera\camera.lua
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "config", "config", "{CDD13B71-4AE2-4F36-B4F7-90395A066E34}"
+	ProjectSection(SolutionItems) = preProject
+		Ashita4\config\camera.ini = Ashita4\config\camera.ini
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Windower5", "Windower5", "{14007575-0FF8-4B03-9061-46ACDA396795}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "addons", "addons", "{77F48435-7429-4692-9068-07FB4130FD18}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "camera", "camera", "{9F281D1A-5702-48A1-808A-5475C5CBDB87}"
+	ProjectSection(SolutionItems) = preProject
+		Windower5\addons\camera\camera.lua = Windower5\addons\camera\camera.lua
+		Windower5\addons\camera\manifest.xml = Windower5\addons\camera\manifest.xml
 	EndProjectSection
 EndProject
 Global
@@ -54,10 +72,14 @@ Global
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{3F3459D0-0179-475E-BC5E-0E96E4F6195C} = {715D06C9-9D87-4159-9C3A-A643BCB5DDBE}
-		{CDCCC132-F79C-42D9-8DAF-F13358EEB395} = {715D06C9-9D87-4159-9C3A-A643BCB5DDBE}
-		{1E9CEFCA-FB92-4B16-B2C4-AE9590A5A0E2} = {CDCCC132-F79C-42D9-8DAF-F13358EEB395}
-		{855F90DC-3AD6-4785-AC02-A71CBEF77AEE} = {715D06C9-9D87-4159-9C3A-A643BCB5DDBE}
-		{E0838ABF-4194-41D4-A862-46517263DED7} = {855F90DC-3AD6-4785-AC02-A71CBEF77AEE}
+		{11D1CE41-C57E-4D90-A388-0352887A3239} = {50E0186C-D9AE-4BF7-A1E1-86C0D1FF24EF}
+		{65A58087-0187-47D8-BDFC-146FB196D1F1} = {11D1CE41-C57E-4D90-A388-0352887A3239}
+		{7A2C494B-4BEE-46BE-AC37-5DCA05876A5E} = {50E0186C-D9AE-4BF7-A1E1-86C0D1FF24EF}
+		{F78F0FDA-F101-4C8D-A480-09957EF8737B} = {7A2C494B-4BEE-46BE-AC37-5DCA05876A5E}
+		{4909A5CA-8C40-4E85-A50E-B4E44218AD10} = {F78F0FDA-F101-4C8D-A480-09957EF8737B}
+		{CDD13B71-4AE2-4F36-B4F7-90395A066E34} = {F78F0FDA-F101-4C8D-A480-09957EF8737B}
+		{77F48435-7429-4692-9068-07FB4130FD18} = {14007575-0FF8-4B03-9061-46ACDA396795}
+		{9F281D1A-5702-48A1-808A-5475C5CBDB87} = {77F48435-7429-4692-9068-07FB4130FD18}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {E7E72D03-13F2-4838-928A-1AA6B39345CD}

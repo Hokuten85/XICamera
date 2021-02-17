@@ -81,7 +81,7 @@ ashita.register_event('load', function()
     -- Set up the Jump to the Code Cave    
     ashita.memory.write_uint8(caveJmpCavePoint, 0xE9)
     ashita.memory.write_int32(caveJmpCavePoint + 0x01, (codeCave - caveJmpCavePoint - 0x05))
-    ashita.memory.write_uint8(caveJmpCavePoint + 0x05, 0xE9)
+    ashita.memory.write_uint8(caveJmpCavePoint + 0x05, 0x90)
     
     local pointerToCameraPointer = ashita.memory.findpattern('FFXiMain.dll', 0, 'C8E878010000EB0233C08BC8A3', 0, 0);
     if (pointerToCameraPointer == 0) then error('Failed to locate critical signature #2!'); end
