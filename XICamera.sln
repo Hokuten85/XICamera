@@ -13,33 +13,33 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Ashita3", "Ashita3", "{50E0
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "addons", "addons", "{11D1CE41-C57E-4D90-A388-0352887A3239}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "camera", "camera", "{65A58087-0187-47D8-BDFC-146FB196D1F1}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "xicamera", "xicamera", "{65A58087-0187-47D8-BDFC-146FB196D1F1}"
 	ProjectSection(SolutionItems) = preProject
-		Ashita3\addons\camera\camera.lua = Ashita3\addons\camera\camera.lua
+		Ashita3\addons\xicamera\xicamera.lua = Ashita3\addons\xicamera\xicamera.lua
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Ashita4", "Ashita4", "{7A2C494B-4BEE-46BE-AC37-5DCA05876A5E}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "addons", "addons", "{F78F0FDA-F101-4C8D-A480-09957EF8737B}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "camera", "camera", "{4909A5CA-8C40-4E85-A50E-B4E44218AD10}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "xicamera", "xicamera", "{4909A5CA-8C40-4E85-A50E-B4E44218AD10}"
 	ProjectSection(SolutionItems) = preProject
-		Ashita4\addons\camera\camera.lua = Ashita4\addons\camera\camera.lua
+		Ashita4\addons\xicamera\xicamera.lua = Ashita4\addons\xicamera\xicamera.lua
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "config", "config", "{CDD13B71-4AE2-4F36-B4F7-90395A066E34}"
 	ProjectSection(SolutionItems) = preProject
-		Ashita4\config\camera.ini = Ashita4\config\camera.ini
+		Ashita4\config\xicamera.ini = Ashita4\config\xicamera.ini
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Windower5", "Windower5", "{14007575-0FF8-4B03-9061-46ACDA396795}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "addons", "addons", "{77F48435-7429-4692-9068-07FB4130FD18}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "camera", "camera", "{9F281D1A-5702-48A1-808A-5475C5CBDB87}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "xicamera", "xicamera", "{9F281D1A-5702-48A1-808A-5475C5CBDB87}"
 	ProjectSection(SolutionItems) = preProject
-		Windower5\addons\camera\camera.lua = Windower5\addons\camera\camera.lua
-		Windower5\addons\camera\manifest.xml = Windower5\addons\camera\manifest.xml
+		Windower5\addons\xicamera\manifest.xml = Windower5\addons\xicamera\manifest.xml
+		Windower5\addons\xicamera\xicamera.lua = Windower5\addons\xicamera\xicamera.lua
 	EndProjectSection
 EndProject
 Global

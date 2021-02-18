@@ -1,6 +1,6 @@
 <package>
-  <name>camera</name>
-  <version>1.0.0.1</version>
+  <name>xicamera</name>
+  <version>0.0.0.1</version>
   <type>addon</type>
   <dependencies>
     <dependency>settings</dependency>
