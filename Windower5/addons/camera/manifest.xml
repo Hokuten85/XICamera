@@ -8,5 +8,7 @@
     <dependency>account</dependency>
     <dependency>string</dependency>
     <dependency>player</dependency>
+    <dependency>struct</dependency>
+    <dependency>memory</dependency>
   </dependencies>
 </package>

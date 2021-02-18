@@ -5,6 +5,22 @@ addon.desc     = 'Modifies the camera distance from the player.';
 
 local common = require('common');
 local ffi = require('ffi');
+local ffi_new = ffi.new
+local ffi_gc = ffi.gc
+local ffi_cast = ffi.cast
+
+ffi.cdef[[
+    struct camera_t
+    {
+        uint8_t Unknown0000[0x44];
+        float X;
+        float Z;
+        float Y;
+        float FocalX;
+        float FocalZ;
+        float FocalY;
+    };
+]]
 
 ----------------------------------------------------------------------------------------------------
 -- Configurations
@@ -26,7 +42,7 @@ local runOnEvent = function()
         return false;
     end
     
-    return not (settings.pauseOnEvent and entity:GetEventPointer(player.TargetIndex) ~= 0)
+    return not (settings.pauseOnEvent and entity:GetEventPointer(player.TargetIndex) ~= 0 and entity:GetEventPointer(player.TargetIndex) ~= nil)
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -44,10 +60,13 @@ local codeCaveValues = {
     0xE9, 0x00, 0x00, 0x00, 0x00 -- jmp to return point
 }
 
-local speedAdjustment_ptr
-local codeCave_ptr
-local injectionPoint_ptr
-local ptrToBaseCamera_ptr
+local speedAdjustment
+local codeCave
+local injectionPoint
+local ptrToCamera
+local baseCameraAddress
+local currentBaseAddress
+local camera
 
 ----------------------------------------------------------------------------------------------------
 -- config helpers
@@ -88,6 +107,16 @@ local save_settings = function(data)
     config:Save(addon.name, ini_file);
 end
 
+local logToFile = function(stringToLog, boolPrint)
+    local file = io.open('\\cameralog.txt', "a");
+    file:write(tostring(stringToLog), "\n");
+    file:close(file);
+    
+    if boolPrint then
+        print(stringToLog)
+    end
+end
+
 ----------------------------------------------------------------------------------------------------
 -- func: load
 -- desc: Event called when the addon is being loaded.
@@ -97,65 +126,66 @@ ashita.events.register('load', 'camera_load', function()
     settings = load_merged_settings(default_settings);
 
     -- Create location to store vertical camera speed adjustment
-    speedAdjustment_ptr = ashita.memory.alloc(4);
-    ashita.memory.write_float(speedAdjustment_ptr, settings.cameraSpeed);
+    speedAdjustment = ashita.memory.alloc(4);
+    ashita.memory.write_float(speedAdjustment, settings.cameraSpeed);
     
     -- Create code cave to adjust vertical camera move speed
-    codeCave_ptr = ashita.memory.alloc(17);
+    codeCave = ashita.memory.alloc(17);
     
-    ashita.memory.unprotect(codeCave_ptr, 17)
-    ashita.memory.write_array(codeCave_ptr, codeCaveValues)
+    ashita.memory.unprotect(codeCave, 17)
+    ashita.memory.write_array(codeCave, codeCaveValues)
     
     -- Push in pointer to Camera Speed into the Code Cave
-    ashita.memory.write_uint32(codeCave_ptr + 0x02, speedAdjustment_ptr)
+    ashita.memory.write_uint32(codeCave + 0x02, speedAdjustment)
     
     -- Get the point where we are injecting code to jump to code cave
-    injectionPoint_ptr = ashita.memory.find('FFXiMain.dll', 0, 'D84C24248B168BCED80D', 0, 0);
-    if (injectionPoint_ptr == 0) then error('Failed to locate critical signature #1!'); end
-    
-    local returnJmpPoint = codeCave_ptr + 0x0C
+    injectionPoint = ashita.memory.find('FFXiMain.dll', 0, 'D84C24248B168BCED80D', 0, 0);
+    if (injectionPoint == 0) then error('Failed to locate critical signature #1!'); end
     
     -- Push in pointer to the return point into the Code Cave
-    ashita.memory.write_int32(returnJmpPoint + 0x01, (injectionPoint_ptr + 0x06) - (returnJmpPoint) - 0x05)
+    ashita.memory.write_int32(codeCave + 0x0D, (injectionPoint + 0x06) - (codeCave + 0x0C) - 0x05)
 
     -- Set up the Jump to the Code Cave    
-    ashita.memory.write_uint8(injectionPoint_ptr, 0xE9)
-    ashita.memory.write_int32(injectionPoint_ptr + 0x01, (codeCave_ptr - injectionPoint_ptr - 0x05))
-    ashita.memory.write_uint8(injectionPoint_ptr + 0x05, 0x90)
+    ashita.memory.write_uint8(injectionPoint, 0xE9)
+    ashita.memory.write_int32(injectionPoint + 0x01, (codeCave - injectionPoint - 0x05))
+    ashita.memory.write_uint8(injectionPoint + 0x05, 0x90)
     
     local pointerToCameraPointer = ashita.memory.find('FFXiMain.dll', 0, 'C8E878010000EB0233C08BC8A3', 0, 0);
     if (pointerToCameraPointer == 0) then error('Failed to locate critical signature #2!'); end
 
-    ptrToBaseCamera_ptr = ashita.memory.read_uint32(pointerToCameraPointer + 0x0D);
-    if (ptrToBaseCamera_ptr == 0) then error('Failed to locate critical signature #3!'); end
-    
+    ptrToCamera = ashita.memory.read_uint32(pointerToCameraPointer + 0x0D);
+    if (ptrToCamera == 0) then error('Failed to locate critical signature #3!'); end
+
+    baseCameraAddress = ffi_cast('uint32_t*', ptrToCamera);
+    currentBaseAddress = baseCameraAddress[0]
+    --logToFile(tostring(baseCameraAddress .. "|" .. baseCameraAddress[0]))
+    camera = ffi_cast('struct camera_t*', baseCameraAddress[0])
+
     readyToRender = true
 end);
 
-ashita.events.register('d3d_beginscene', 'camera_beginscene', function()
-    if ptrToBaseCamera_ptr ~= 0 and runOnEvent() and readyToRender then
-        local baseCameraAddress = ashita.memory.read_uint32(ptrToBaseCamera_ptr);
-
-        if baseCameraAddress ~= 0 then
-            local focal_x = ashita.memory.read_float(baseCameraAddress + 0x50)
-            local focal_z = ashita.memory.read_float(baseCameraAddress + 0x54)
-            local focal_y = ashita.memory.read_float(baseCameraAddress + 0x58)
-            
-            local diff_x = ashita.memory.read_float(baseCameraAddress + 0x44) - focal_x
-            local diff_z = ashita.memory.read_float(baseCameraAddress + 0x48) - focal_z
-            local diff_y = ashita.memory.read_float(baseCameraAddress + 0x4C) - focal_y
+ashita.events.register('d3d_beginscene', 'camera_beginscene', function(isRenderingBackBuffer)
+    if isRenderingBackBuffer and baseCameraAddress[0] ~= nil and runOnEvent() and readyToRender then
+        if currentBaseAddress ~= baseCameraAddress[0] then
+            camera = ffi_cast('struct camera_t*', baseCameraAddress[0])
+            currentBaseAddress = baseCameraAddress[0]
+        end
+        if camera ~= nil then
+            local diff_x = camera.X - camera.FocalX
+            local diff_z = camera.Z - camera.FocalZ
+            local diff_y = camera.Y - camera.FocalY
             
             local distance = 1 / math.sqrt(diff_x * diff_x + diff_z * diff_z + diff_y * diff_y) * settings.distance
             
-            ashita.memory.write_float(baseCameraAddress + 0x44, diff_x * distance + focal_x)
-            ashita.memory.write_float(baseCameraAddress + 0x48, diff_z * distance + focal_z)
-            ashita.memory.write_float(baseCameraAddress + 0x4C, diff_y * distance + focal_y)
+            camera.X = diff_x * distance + camera.FocalX
+            camera.Z = diff_z * distance + camera.FocalZ
+            camera.Y = diff_y * distance + camera.FocalY
         end
     end
 end);
 
 local setCameraSpeed = function(newSpeed)
-    ashita.memory.write_float(speedAdjustment_ptr, newSpeed);
+    ashita.memory.write_float(speedAdjustment, newSpeed);
     settings.cameraSpeed = newSpeed
 end
 
@@ -195,6 +225,8 @@ ashita.events.register('command', 'camera_command', function(e)
             print("Set Distance: </camera|/cam> <distance|d> <###>")
             print("Set Pause on event: </camera|/cam> <pauseonevent> [t|true|f|false]")
             print("Start/Stop: </camera|/cam> <start|stop>")
+        elseif command_args[2] == 'derp'  then
+            print(tostring(entity:GetEventPointer(player.TargetIndex)))
         end
     end
 
@@ -202,14 +234,14 @@ ashita.events.register('command', 'camera_command', function(e)
 end)
 
 local restorePointers = function()
-    if (injectionPoint_ptr ~= 0 and injectionPoint_ptr ~= nil) then
-        ashita.memory.write_array(injectionPoint_ptr, originalValues)
+    if (injectionPoint ~= 0 and injectionPoint ~= nil) then
+        ashita.memory.write_array(injectionPoint, originalValues)
     end
-    if (speedAdjustment_ptr ~= 0 and speedAdjustment_ptr ~= nil) then
-        ashita.memory.dealloc(speedAdjustment_ptr, 4)
+    if (speedAdjustment ~= 0 and speedAdjustment ~= nil) then
+        ashita.memory.dealloc(speedAdjustment, 4)
     end
-    if (codeCave_ptr ~= 0 and codeCave_ptr ~= nil) then
-        ashita.memory.dealloc(codeCave_ptr, 17)
+    if (codeCave ~= 0 and codeCave ~= nil) then
+        ashita.memory.dealloc(codeCave, 17)
     end
 end
 
@@ -225,5 +257,4 @@ end);
 
 --TODO replace with unload event
 gc_global = ffi.new('int*');
-
-ffi.gc(gc_global, restorePointers);
+ffi_gc(gc_global, restorePointers);
