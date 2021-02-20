@@ -37,12 +37,16 @@ local player = GetPlayerEntity();
 local readyToRender = false
 
 local runOnEvent = function()
-    player = GetPlayerEntity();
+    if not settings.pauseOnEvent then
+        return true
+    end
+
     if (player == nil) then
         return false;
     end
     
-    return not (settings.pauseOnEvent and entity:GetEventPointer(player.TargetIndex) ~= 0 and entity:GetEventPointer(player.TargetIndex) ~= nil)
+    local entityPointer = entity:GetEventPointer(player.TargetIndex)
+    return not (entityPointer ~= 0 and entityPointer ~= nil)
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -181,6 +185,19 @@ ashita.events.register('d3d_beginscene', 'camera_beginscene', function(isRenderi
             camera.Y = diff_y * distance + camera.FocalY
         end
     end
+end);
+
+ashita.events.register('packet_in', 'packet_in_callback1', function(e)
+    if e.id == 0x00A then -- zone in packet
+        ashita.timer.once(5, function()
+            player = GetPlayerEntity()
+        end)
+        readyToRender = true
+    elseif e.id == 0x04B then -- logout acknowledgment
+        readyToRender = false
+    end
+
+    return false
 end);
 
 local setCameraSpeed = function(newSpeed)

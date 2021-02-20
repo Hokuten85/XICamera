@@ -14,17 +14,29 @@ local default_config =
     pauseOnEvent = true
 };
 local configs = default_config;
-
-local player = GetPlayerEntity();
 local readyToRender = false
 
+local getPlayerPtr = function()
+    local entity_map = AshitaCore:GetPointerManager():GetPointer('entitymap');
+    if (entity_map == 0) then
+        return nil;
+    end
+    -- Locate the player pointer..
+    return ashita.memory.read_uint32(ashita.memory.read_uint32(entity_map) + (4 * GetPlayerEntity().TargetIndex));
+end
+
+local player = getPlayerPtr()
 local runOnEvent = function()
-    player = GetPlayerEntity();
+    if not configs.pauseOnEvent then
+        return true
+    end
+
     if (player == nil) then
         return false;
     end
     
-    return not (configs.pauseOnEvent and player.Status == 4)
+    local eventPointer = ashita.memory.read_uint32(player + 0xD4)
+    return not (eventPointer ~= 0)
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -73,10 +85,8 @@ ashita.register_event('load', function()
     caveJmpCavePoint = ashita.memory.findpattern('FFXiMain.dll', 0, 'D84C24248B168BCED80D', 0, 0);
     if (caveJmpCavePoint == 0) then error('Failed to locate critical signature #1!'); end
     
-    local returnJmpPoint = codeCave + 0x0C
-    
     -- Push in pointer to the return point into the Code Cave
-    ashita.memory.write_int32(returnJmpPoint + 0x01, (caveJmpCavePoint + 0x06) - (returnJmpPoint) - 0x05)
+    ashita.memory.write_int32(codeCave + 0x0D, (caveJmpCavePoint + 0x06) - (codeCave + 0x0C) - 0x05)
     
     -- Set up the Jump to the Code Cave    
     ashita.memory.write_uint8(caveJmpCavePoint, 0xE9)
@@ -114,6 +124,19 @@ ashita.register_event('prerender', function()
     end
 end);
 
+ashita.register_event('incoming_packet', function(id, size, packet, packet_modified, blocked)
+    if id == 0x00A then -- zone in packet
+        ashita.timer.once(5, function()
+            player = getPlayerPtr()
+        end)
+        readyToRender = true
+    elseif (id == 0x04B) then -- logout acknowledgment
+        readyToRender = false
+    end
+
+    return false
+end);
+
 local setCameraSpeed = function(newSpeed)
     ashita.memory.write_float(cameraSpeedAdjustment, newSpeed);
     configs.cameraSpeed = newSpeed
@@ -121,10 +144,8 @@ end
 
 ashita.register_event('command', function(command, ntype)
     local command_args = command:lower():args()
-    if (command_args[1] ~= '/camera' and command_args[1] ~= '/cam') then
-        return false
-    elseif (command_args[1] == '/camera' or command_args[1] == '/cam') then
-        if (command_args[2] == 'distance' or command_args[2] == 'd') then
+    if table.hasvalue({'/camera', '/cam', '/xicamera', '/xicam'}, command_args[1]) then
+        if table.hasvalue({'distance', 'd'}, command_args[2]) then
             if (tonumber(command_args[3])) then
                 local newDistance = tonumber(command_args[3])
                 configs.distance = newDistance
@@ -138,9 +159,9 @@ ashita.register_event('command', function(command, ntype)
             readyToRender = false
         elseif (command_args[2] == 'pauseonevent')  then
             local newSetting
-            if command_args[3] == 't' or command_args[3] == 'true' then
+            if table.hasvalue({'true', 't'}, command_args[3]) then
                 newSetting = true
-            elseif command_args[3] == 'f' or command_args[3] == 'false' then
+            elseif table.hasvalue({'false', 'f'}, command_args[3]) then
                 newSetting = false
             elseif command_args[3] == nil then
                 newSetting = not configs.pauseOnEvent
@@ -151,10 +172,14 @@ ashita.register_event('command', function(command, ntype)
                 ashita.settings.save(_addon.path .. '/settings/settings.json', configs);
                 print("Pause on event setting changed to " .. tostring(configs.pauseOnEvent))
             end
-        elseif (command_args[2] == 'help' or command_args[2] == 'h') then
+        elseif table.hasvalue({'help', 'h'}, command_args[2]) then
             print("Set Distance: </camera|/cam> <distance|d> <###>")
             print("Set Pause on event: </camera|/cam> <pauseonevent> [t|true|f|false]")
             print("Start/Stop: </camera|/cam> <start|stop>")
+        elseif command_args[2] == 'derp' then
+            local player = getPlayerPtr()
+            local eventPointer = ashita.memory.read_uint32(player + 0xD4)
+            print(tostring(eventPointer))
         end
     end
 

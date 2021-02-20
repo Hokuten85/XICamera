@@ -76,8 +76,12 @@ memory.entity_events = array({signature = '8B560C8B042A8B0485'}, ptr(entity_even
 
 local readyToRender = false
 local runOnEvent = function()
+    if not options.pauseOnEvent then
+        return true
+    end
+
     local player_event = memory.entity_events[player.index]
-    return not (options.pauseOnEvent and player_event ~= nil and player_event.event_ptr ~= nil)
+    return not (player_event ~= nil and player_event.event_ptr ~= nil)
 end
 
 local logToFile = function(stringToLog, boolPrint)
