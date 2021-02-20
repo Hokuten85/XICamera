@@ -1,5 +1,5 @@
 addon.author   = 'Hokuten';
-addon.name     = 'camera';
+addon.name     = 'xicamera';
 addon.version  = '0.0.1';
 addon.desc     = 'Modifies the camera distance from the player.';
 
@@ -85,7 +85,7 @@ local load_merged_settings = function(defaults)
     if (config:Load(addon.name, ini_file)) then
         s.distance     = config:GetFloat(addon.name, 'default', 'distance',     defaults.distance);
         s.cameraSpeed  = config:GetFloat(addon.name, 'default', 'cameraSpeed',  defaults.cameraSpeed);
-        s.pauseOnEvent = config:GetBool(addon.name,     'default', 'pauseOnEvent', defaults.pauseOnEvent);
+        s.pauseOnEvent = config:GetBool(addon.name,  'default', 'pauseOnEvent', defaults.pauseOnEvent);
     end
     return s;
 end
@@ -158,7 +158,6 @@ ashita.events.register('load', 'camera_load', function()
 
     baseCameraAddress = ffi_cast('uint32_t*', ptrToCamera);
     currentBaseAddress = baseCameraAddress[0]
-    --logToFile(tostring(baseCameraAddress .. "|" .. baseCameraAddress[0]))
     camera = ffi_cast('struct camera_t*', baseCameraAddress[0])
 
     readyToRender = true
@@ -191,10 +190,8 @@ end
 
 ashita.events.register('command', 'camera_command', function(e)
     local command_args = e.command:lower():args()
-    if (command_args[1] ~= '/camera' and command_args[1] ~= '/cam') then
-        return false
-    elseif (command_args[1] == '/camera' or command_args[1] == '/cam') then
-        if (command_args[2] == 'distance' or command_args[2] == 'd') then
+    if table.contains({'/camera', '/cam', '/xicamera', '/xicam'}, command_args[1]) then
+        if table.contains({'distance', 'd'}, command_args[2]) then
             if (tonumber(command_args[3])) then
                 local newDistance = tonumber(command_args[3])
                 settings.distance = newDistance
@@ -208,9 +205,9 @@ ashita.events.register('command', 'camera_command', function(e)
             readyToRender = false
         elseif (command_args[2] == 'pauseonevent')  then
             local newSetting
-            if command_args[3] == 't' or command_args[3] == 'true' then
+            if table.contains({'t', 'true'}, command_args[3]) then
                 newSetting = true
-            elseif command_args[3] == 'f' or command_args[3] == 'false' then
+            elseif table.contains({'f', 'false'}, command_args[3]) then
                 newSetting = false
             elseif command_args[3] == nil then
                 newSetting = not settings.pauseOnEvent
@@ -221,12 +218,10 @@ ashita.events.register('command', 'camera_command', function(e)
                 save_settings(settings);
                 print("Pause on event setting changed to " .. tostring(settings.pauseOnEvent))
             end
-        elseif (command_args[2] == 'help' or command_args[2] == 'h') then
+        elseif table.contains({'help', 'h'}, command_args[2]) then
             print("Set Distance: </camera|/cam> <distance|d> <###>")
             print("Set Pause on event: </camera|/cam> <pauseonevent> [t|true|f|false]")
             print("Start/Stop: </camera|/cam> <start|stop>")
-        elseif command_args[2] == 'derp'  then
-            print(tostring(entity:GetEventPointer(player.TargetIndex)))
         end
     end
 
@@ -236,12 +231,15 @@ end)
 local restorePointers = function()
     if (injectionPoint ~= 0 and injectionPoint ~= nil) then
         ashita.memory.write_array(injectionPoint, originalValues)
+        injectionPoint = nil
     end
     if (speedAdjustment ~= 0 and speedAdjustment ~= nil) then
         ashita.memory.dealloc(speedAdjustment, 4)
+        speedAdjustment = nil
     end
     if (codeCave ~= 0 and codeCave ~= nil) then
         ashita.memory.dealloc(codeCave, 17)
+        codeCave = nil
     end
 end
 
