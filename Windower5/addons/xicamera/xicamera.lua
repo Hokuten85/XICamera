@@ -212,6 +212,8 @@ end)
 --###################################################
 local camera = command.new('camera')
 local cam = command.new('cam')
+local xicamera = command.new('xicamera')
+local xicam = command.new('xicam')
 
 local setCameraSpeed = function(newSpeed)
     cameraSpeedAdjustment_Ptr[0] = newSpeed
@@ -256,20 +258,20 @@ local setPauseOnEvent = function(pauseOnEvent)
 end
 
 local displayHelp = function()
-    add_text("Set Distance: </camera|/cam> <distance|d> <###>")
-    add_text("Set Pause on event: </camera|/cam> <pauseonevent> [t|true|f|false]")
-    add_text("Start/Stop: </camera|/cam> <start|stop>")
+    add_text("</xicamera | /camera | /xicam | /cam>")
+    add_text("Set Distance: <distance|d> <###>")
+    add_text("Set Pause on event: <pauseonevent> [t|true|f|false]")
+    add_text("Start/Stop: <start|stop>")
 end
 
-camera:register('distance', setDistance, '<newDistance:integer>')
-camera:register('d', setDistance, '<newDistance:integer>')
-cam:register('distance', setDistance, '<newDistance:integer>')
-cam:register('d', setDistance, '<newDistance:integer>')
-cam:register('start', startRender)
-cam:register('stop', stopRender)
-cam:register('pauseonevent', setPauseOnEvent, '[pauseOnEvent:one_of(t,true,f,false)]')
-cam:register('help', displayHelp)
-cam:register('h', displayHelp)
+-- define chat functions 
+enumerable.all({camera, cam,  xicamera, xicam}, function(cmd)
+    enumerable.all({'distance', 'd'}, function (fn) cmd:register(fn, setDistance, '<newDistance:integer>') end)
+    enumerable.all({'help', 'h'}, function (fn) cmd:register(fn, displayHelp) end)
+    cmd:register('start', startRender)
+    cmd:register('stop', stopRender)
+    cmd:register('pauseonevent', setPauseOnEvent, '[pauseOnEvent:one_of(t,true,f,false)]')
+end)
 
 --TODO replace with unload event
 gc_global = ffi_new('int*')
@@ -278,23 +280,20 @@ ffi_gc(gc_global, restorePointers)
 --[[
 Copyright © 2021, Hokuten
 All rights reserved.
-
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
-
     * Redistributions of source code must retain the above copyright
       notice, this list of conditions and the following disclaimer.
     * Redistributions in binary form must reproduce the above copyright
       notice, this list of conditions and the following disclaimer in the
       documentation and/or other materials provided with the distribution.
-    * Neither the name of XICamera nor the
+    * Neither the name of Chiaia nor the
       names of its contributors may be used to endorse or promote products
       derived from this software without specific prior written permission.
-
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
 ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
 WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL Hokuten BE LIABLE FOR ANY
+DISCLAIMED. IN NO EVENT SHALL Chiaia BE LIABLE FOR ANY
 DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
 (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
 LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
