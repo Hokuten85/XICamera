@@ -10,14 +10,8 @@ local scanner = require('core.scanner')
 local settings = require('settings')
 local struct_lib = require('struct')
 local windower = require('core.windower')
-
-
-ffi.cdef[[
-    void* HeapAlloc(void*, uint32_t, size_t);
-    bool HeapFree(void*, uint32_t, void*);
-    void* HeapCreate(uint32_t, size_t, size_t);
-    bool HeapDestroy(void*);
-]]
+local win32 = require('win32')
+local enumerable = require('enumerable')
 
 local ffi_new = ffi.new
 local ffi_gc = ffi.gc
@@ -29,6 +23,46 @@ local struct = struct_lib.struct
 local array = struct_lib.array
 local float = struct_lib.float
 local uint32 = struct_lib.uint32
+
+local HeapAlloc = win32.def({
+    name = 'HeapAlloc',
+    returns = 'void*',
+    parameters = {
+        'void*',
+        'uint32_t',
+        'size_t'
+    },
+    failure = false
+})
+local HeapFree = win32.def({
+    name = 'HeapFree',
+    returns = 'bool',
+    parameters = {
+        'void*',
+        'uint32_t',
+        'void*'
+    },
+    failure = false
+})
+local HeapCreate = win32.def({
+    name = 'HeapCreate',
+    returns = 'void*',
+    parameters = {
+        'uint32_t',
+        'size_t',
+        'size_t'
+    },
+    failure = false
+})
+local HeapDestroy = win32.def({
+    name = 'HeapDestroy',
+    returns = 'bool',
+    parameters = {
+        'void*'
+    },
+    failure = false
+})
+
 
 local defaults = {
     distance = 6,
@@ -59,7 +93,6 @@ end
 --###################################################
 --# SET UP Camera Speed Adjustment
 --###################################################
-
 local originalValues = {
     0xD8, 0x4C, 0x24, 0x24, -- fmul dword ptr [esp+24]
     0x8B, 0x16, -- mov edx,[esi]
@@ -72,14 +105,20 @@ local codeCaveValues = {
     0xE9, 0x00, 0x00, 0x00, 0x00 -- jmp to return point
 }
 
+local try = function(d, e)
+    if d == false then
+        error(e.ErrorMsg)
+    end
+    return d
+end
  --Create memory location to store Code Cave
- local codeCaveHeap = ffi_gc(ffi_C.HeapCreate(0x40000, 0, 0), function(heap)
+ local codeCaveHeap = try(ffi_gc(HeapCreate(0x40000, 0, 0), function(heap)
      destroyed = true
-     ffi_C.HeapDestroy(codeCaveHeap)
- end)
+     HeapDestroy(codeCaveHeap)
+ end), {ErrorMsg = "Failed to create memory location for code cave."})
 
  -- Allocate the space for the Code Cave
- local codeCave = ffi_cast('uint8_t*', ffi_C.HeapAlloc(codeCaveHeap, 8, 17))
+ local codeCave = ffi_cast('uint8_t*', try(HeapAlloc(codeCaveHeap, 8, 17), {ErrorMsg = "Failed to allocate memory for code cave."}))
 
  -- Populate general structure of code cave
  for i = 1, #codeCaveValues do
@@ -87,13 +126,13 @@ local codeCaveValues = {
  end
 
  -- Create memory location to store Camera Speed
- local cameraSpeedAdjustmentHeap = ffi_gc(ffi_C.HeapCreate(0x40000, 0, 0), function(heap)
+ local cameraSpeedAdjustmentHeap = try(ffi_gc(HeapCreate(0x40000, 0, 0), function(heap)
      destroyed = true
-     ffi_C.HeapDestroy(cameraSpeedAdjustmentHeap)
- end)
+     HeapDestroy(cameraSpeedAdjustmentHeap)
+ end), {ErrorMsg = "Failed to create memory location to save speed adjustment"})
 
  -- Allocate and set Camera speed based on settings
-local cameraSpeedAdjustment_Ptr = ffi_cast('float*', ffi_C.HeapAlloc(cameraSpeedAdjustmentHeap, 8, ffi.sizeof('float')))
+local cameraSpeedAdjustment_Ptr = ffi_cast('float*', try(HeapAlloc(cameraSpeedAdjustmentHeap, 8, ffi.sizeof('float')), {ErrorMsg = "Failed to allocate memory for speed adjustment"}))
 cameraSpeedAdjustment_Ptr[0] = ffi_new('float', options.cameraSpeed)
 
  -- Push in pointer to Camera Speed into the Code Cave
@@ -127,15 +166,11 @@ local camera = struct({
     position = {0x44, vector_3f},
     focal    = {0x44, vector_3f}
 })
-local pointerToCamera = struct({
+memory.pointerToCamera = struct({signature = 'C8E878010000EB0233C08BC8A3*'}, {
     camera = {0x0, ptr(camera)}
 })
-memory.pointerToCameraPointer = struct({signature = 'C8E878010000EB0233C08BC8A3'}, {
-    --camera    = {0x0, ptr(rootCamera)}
-    pointerToCamera = {0x0, pointerToCamera}
-})
 
-local ptrToCamera = memory.pointerToCameraPointer.pointerToCamera
+local ptrToCamera = memory.pointerToCamera
 readyToRender = true
 
 local coroutine_sleep_frame = coroutine.sleep_frame
@@ -175,7 +210,6 @@ end)
 --###################################################
 --# Commands
 --###################################################
-
 local camera = command.new('camera')
 local cam = command.new('cam')
 
@@ -206,9 +240,9 @@ end
 
 local setPauseOnEvent = function(pauseOnEvent)
     local newSetting
-    if pauseOnEvent == 't' or pauseOnEvent == 'true' then
+    if enumerable.contains({'t','true'}, pauseOnEvent) then
         newSetting = true
-    elseif pauseOnEvent == 'f' or pauseOnEvent == 'false' then
+    elseif enumerable.contains({'f','false'}, pauseOnEvent) then
         newSetting = false
     elseif pauseOnEvent == nil then
         newSetting = not options.pauseOnEvent

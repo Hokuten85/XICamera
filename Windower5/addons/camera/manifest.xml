@@ -10,5 +10,6 @@
     <dependency>player</dependency>
     <dependency>struct</dependency>
     <dependency>memory</dependency>
+    <dependency>enumerable</dependency>
   </dependencies>
 </package>
