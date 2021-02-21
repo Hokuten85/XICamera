@@ -71,17 +71,17 @@ local defaults = {
 }
 local options = settings.load(defaults)
 
+add_text(player.name)
+add_text(tostring(player.id))
+add_text(tostring(player.index))
+
 local entity_event = struct({ event_ptr = {0xD4, ptr()} })
 memory.entity_events = array({signature = '8B560C8B042A8B0485'}, ptr(entity_event), 0x900)
 
 local readyToRender = false
-local runOnEvent = function()
-    if not options.pauseOnEvent then
-        return true
-    end
-
+local eventActive = function()
     local player_event = memory.entity_events[player.index]
-    return not (player_event ~= nil and player_event.event_ptr ~= nil)
+    return (player_event ~= nil and player_event.event_ptr ~= nil)
 end
 
 local logToFile = function(stringToLog, boolPrint)
@@ -177,20 +177,30 @@ memory.pointerToCamera = struct({signature = 'C8E878010000EB0233C08BC8A3*'}, {
 local ptrToCamera = memory.pointerToCamera
 readyToRender = true
 
+local oldCam = {x = 0, z = 0, y = 0}
+local newCam = struct_lib.new(vector_3f)
+
 local coroutine_sleep_frame = coroutine.sleep_frame
 --ui.display(function()
 coroutine.schedule(function()
     while(true) do
-        if readyToRender and runOnEvent() and ptrToCamera and ptrToCamera.camera ~= nil then
+        if readyToRender and ptrToCamera and ptrToCamera.camera ~= nil then
             local camera = ptrToCamera.camera
             local diff_x = camera.position.x - camera.focal.x
             local diff_z = camera.position.z - camera.focal.z
             local diff_y = camera.position.y - camera.focal.y
 
             local distance = 1 / math.sqrt(diff_x * diff_x + diff_z * diff_z + diff_y * diff_y) * options.distance
-            camera.position.x = diff_x * distance + camera.focal.x
-            camera.position.z = diff_z * distance + camera.focal.z
-            camera.position.y = diff_y * distance + camera.focal.y
+            
+            newCam.x = diff_x * distance + camera.focal.x
+            newCam.z = diff_z * distance + camera.focal.z
+            newCam.y = diff_y * distance + camera.focal.y
+
+            if not (options.pauseOnEvent and eventActive() and not (newCam.x == oldCam.x and newCam.z == oldCam.z and newCam.y == oldCam.y)) then
+                camera.position = newCam
+            end
+
+            oldCam.x = newCam.x; oldCam.z = newCam.z; oldCam.y = newCam.y
         end
         coroutine_sleep_frame()
     end
