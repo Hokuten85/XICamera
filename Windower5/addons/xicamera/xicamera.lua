@@ -23,6 +23,7 @@ local struct = struct_lib.struct
 local array = struct_lib.array
 local float = struct_lib.float
 local uint32 = struct_lib.uint32
+local bool = struct_lib.bool
 
 local HeapAlloc = win32.def({
     name = 'HeapAlloc',
@@ -73,6 +74,11 @@ local options = settings.load(defaults)
 
 local entity_event = struct({ event_ptr = {0xD4, ptr()} })
 memory.entity_events = array({signature = '8B560C8B042A8B0485'}, ptr(entity_event), 0x900)
+memory.cameraConnect = struct({signature = '80A0B2000000FBC605*????????00'}, {
+    isConnected = {0x0, bool}
+})
+local entityEvents = memory.entity_events
+local cameraConnect = memory.cameraConnect
 
 local readyToRender = false
 local runOnEvent = function()
@@ -80,8 +86,8 @@ local runOnEvent = function()
         return true
     end
 
-    local player_event = memory.entity_events[player.index]
-    return not (player_event ~= nil and player_event.event_ptr ~= nil)
+    local player_event = entityEvents[player.index]
+    return not (player_event ~= nil and player_event.event_ptr ~= nil and not cameraConnect.isConnected)
 end
 
 local logToFile = function(stringToLog, boolPrint)
@@ -170,7 +176,7 @@ local camera = struct({
     position = {0x44, vector_3f},
     focal    = {0x44, vector_3f}
 })
-memory.pointerToCamera = struct({signature = 'C8E878010000EB0233C08BC8A3*'}, {
+memory.pointerToCamera = struct({signature = '83C40485C974118B116A01FF5218C705*'}, {
     camera = {0x0, ptr(camera)}
 })
 
@@ -276,6 +282,12 @@ enumerable.all({camera, cam,  xicamera, xicam}, function(cmd)
     cmd:register('stop', stopRender)
     cmd:register('pauseonevent', setPauseOnEvent, '[pauseOnEvent:one_of(t,true,f,false)]')
 end)
+
+local derp = function()
+    add_text(tostring(memory.cameraDisconnect.isConnected))
+end
+
+cam:register('junk', derp)
 
 --TODO replace with unload event
 gc_global = ffi_new('int*')
