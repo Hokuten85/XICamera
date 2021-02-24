@@ -27,27 +27,10 @@ ffi.cdef[[
 ----------------------------------------------------------------------------------------------------
 local default_settings = T{
     distance    = 6,
-    cameraSpeed = 1.0,
-    pauseOnEvent = true
+    cameraSpeed = 1.0
 };
 local settings = default_settings;
-
-local entity = AshitaCore:GetMemoryManager():GetEntity();
-local player = GetPlayerEntity();
 local readyToRender = false
-
-local runOnEvent = function()
-    if not settings.pauseOnEvent then
-        return true
-    end
-
-    if (player == nil) then
-        return false;
-    end
-    
-    local entityPointer = entity:GetEventPointer(player.TargetIndex)
-    return not (entityPointer ~= 0 and entityPointer ~= nil)
-end
 
 ----------------------------------------------------------------------------------------------------
 -- Variables
@@ -69,8 +52,8 @@ local codeCave
 local injectionPoint
 local ptrToCamera
 local baseCameraAddress
-local currentBaseAddress
-local camera
+local cameraIsConnected
+local follow
 
 ----------------------------------------------------------------------------------------------------
 -- config helpers
@@ -89,7 +72,6 @@ local load_merged_settings = function(defaults)
     if (config:Load(addon.name, ini_file)) then
         s.distance     = config:GetFloat(addon.name, 'default', 'distance',     defaults.distance);
         s.cameraSpeed  = config:GetFloat(addon.name, 'default', 'cameraSpeed',  defaults.cameraSpeed);
-        s.pauseOnEvent = config:GetBool(addon.name,  'default', 'pauseOnEvent', defaults.pauseOnEvent);
     end
     return s;
 end
@@ -106,7 +88,6 @@ local save_settings = function(data)
     config:Delete(addon.name, ini_file);
     config:SetValue(addon.name, 'default', 'distance',     tostring(data.distance));
     config:SetValue(addon.name, 'default', 'cameraSpeed',  tostring(data.cameraSpeed));
-    config:SetValue(addon.name, 'default', 'pauseOnEvent', tostring(data.pauseOnEvent));
 
     config:Save(addon.name, ini_file);
 end
@@ -161,18 +142,21 @@ ashita.events.register('load', 'camera_load', function()
     if (ptrToCamera == 0) then error('Failed to locate critical signature #3!'); end
 
     baseCameraAddress = ffi_cast('uint32_t*', ptrToCamera);
-    currentBaseAddress = baseCameraAddress[0]
-    camera = ffi_cast('struct camera_t*', baseCameraAddress[0])
+
+    local cameraConnectSig = ashita.memory.find('FFXiMain.dll', 0, '80A0B2000000FBC605????????00', 0x09, 0);
+    if (cameraConnectSig == 0) then error('Failed to locate critical signature #4!') end
+    local cameraConnectPtr = ashita.memory.read_uint32(cameraConnectSig);
+    if (cameraConnectPtr == 0) then error('Failed to locate critical signature #5!') end
+    cameraIsConnected = ffi_cast('bool*', cameraConnectPtr);
+    
+    follow = AshitaCore:GetMemoryManager():GetAutoFollow();
 
     readyToRender = true
 end);
 
 ashita.events.register('d3d_beginscene', 'camera_beginscene', function(isRenderingBackBuffer)
-    if isRenderingBackBuffer and baseCameraAddress[0] ~= nil and runOnEvent() and readyToRender then
-        if currentBaseAddress ~= baseCameraAddress[0] then
-            camera = ffi_cast('struct camera_t*', baseCameraAddress[0])
-            currentBaseAddress = baseCameraAddress[0]
-        end
+    if readyToRender and isRenderingBackBuffer and baseCameraAddress[0] ~= nil and cameraIsConnected[0] and follow:GetIsFirstPersonCamera() == 0 then
+        local camera = ffi_cast('struct camera_t*', baseCameraAddress[0])
         if camera ~= nil then
             local diff_x = camera.X - camera.FocalX
             local diff_z = camera.Z - camera.FocalZ
@@ -189,9 +173,6 @@ end);
 
 ashita.events.register('packet_in', 'packet_in_callback1', function(e)
     if e.id == 0x00A then -- zone in packet
-        ashita.timer.once(5, function()
-            player = GetPlayerEntity()
-        end)
         readyToRender = true
     elseif e.id == 0x04B then -- logout acknowledgment
         readyToRender = false
@@ -220,24 +201,8 @@ ashita.events.register('command', 'camera_command', function(e)
             readyToRender = true
         elseif (command_args[2] == 'stop')  then
             readyToRender = false
-        elseif (command_args[2] == 'pauseonevent')  then
-            local newSetting
-            if table.contains({'t', 'true'}, command_args[3]) then
-                newSetting = true
-            elseif table.contains({'f', 'false'}, command_args[3]) then
-                newSetting = false
-            elseif command_args[3] == nil then
-                newSetting = not settings.pauseOnEvent
-            end
-            
-            if newSetting ~= nil then
-                settings.pauseOnEvent = newSetting
-                save_settings(settings);
-                print("Pause on event setting changed to " .. tostring(settings.pauseOnEvent))
-            end
         elseif table.contains({'help', 'h'}, command_args[2]) then
             print("Set Distance: </camera|/cam> <distance|d> <###>")
-            print("Set Pause on event: </camera|/cam> <pauseonevent> [t|true|f|false]")
             print("Start/Stop: </camera|/cam> <start|stop>")
         end
     end

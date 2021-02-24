@@ -20,7 +20,6 @@ local ffi_C = ffi.C
 local add_text = chat.add_text
 local ptr = struct_lib.ptr
 local struct = struct_lib.struct
-local array = struct_lib.array
 local float = struct_lib.float
 local uint32 = struct_lib.uint32
 local bool = struct_lib.bool
@@ -64,31 +63,12 @@ local HeapDestroy = win32.def({
     failure = false
 })
 
-
 local defaults = {
     distance = 6,
-    cameraSpeed = 1.0,
-    pauseOnEvent = true
+    cameraSpeed = 1.0
 }
 local options = settings.load(defaults)
-
-local entity_event = struct({ event_ptr = {0xD4, ptr()} })
-memory.entity_events = array({signature = '8B560C8B042A8B0485'}, ptr(entity_event), 0x900)
-memory.cameraConnect = struct({signature = '80A0B2000000FBC605*????????00'}, {
-    isConnected = {0x0, bool}
-})
-local entityEvents = memory.entity_events
-local cameraConnect = memory.cameraConnect
-
 local readyToRender = false
-local runOnEvent = function()
-    if not options.pauseOnEvent then
-        return true
-    end
-
-    local player_event = entityEvents[player.index]
-    return not (player_event ~= nil and player_event.event_ptr ~= nil and not cameraConnect.isConnected)
-end
 
 local logToFile = function(stringToLog, boolPrint)
     local file = io.open(windower.user_path .. '\\cameralog.txt', "a");
@@ -179,15 +159,19 @@ local camera = struct({
 memory.pointerToCamera = struct({signature = '83C40485C974118B116A01FF5218C705*'}, {
     camera = {0x0, ptr(camera)}
 })
+memory.cameraConnect = struct({signature = '80A0B2000000FBC605*????????00'}, {
+    isConnected = {0x0, bool}
+})
 
 local ptrToCamera = memory.pointerToCamera
+local cameraConnect = memory.cameraConnect
+local follow = memory.follow
 readyToRender = true
 
 local coroutine_sleep_frame = coroutine.sleep_frame
---ui.display(function()
 coroutine.schedule(function()
     while(true) do
-        if readyToRender and runOnEvent() and ptrToCamera and ptrToCamera.camera ~= nil then
+        if readyToRender and ptrToCamera and ptrToCamera.camera ~= nil and cameraConnect.isConnected and not follow.first_person_view then
             local camera = ptrToCamera.camera
             local diff_x = camera.position.x - camera.focal.x
             local diff_z = camera.position.z - camera.focal.z
@@ -220,11 +204,6 @@ end)
 --###################################################
 --# Commands
 --###################################################
-local camera = command.new('camera')
-local cam = command.new('cam')
-local xicamera = command.new('xicamera')
-local xicam = command.new('xicam')
-
 local setCameraSpeed = function(newSpeed)
     cameraSpeedAdjustment_Ptr[0] = newSpeed
     options.cameraSpeed = newSpeed
@@ -250,29 +229,16 @@ local stopRender = function()
     add_text("Stopping distance adjustment")
 end
 
-local setPauseOnEvent = function(pauseOnEvent)
-    local newSetting
-    if enumerable.contains({'t','true'}, pauseOnEvent) then
-        newSetting = true
-    elseif enumerable.contains({'f','false'}, pauseOnEvent) then
-        newSetting = false
-    elseif pauseOnEvent == nil then
-        newSetting = not options.pauseOnEvent
-    end
-    
-    if newSetting ~= nil then
-        options.pauseOnEvent = newSetting
-        settings.save()
-        add_text("Pause on event setting changed to " .. tostring(options.pauseOnEvent))
-    end
-end
-
 local displayHelp = function()
     add_text("</xicamera | /camera | /xicam | /cam>")
     add_text("Set Distance: <distance|d> <###>")
-    add_text("Set Pause on event: <pauseonevent> [t|true|f|false]")
     add_text("Start/Stop: <start|stop>")
 end
+
+local camera = command.new('camera')
+local cam = command.new('cam')
+local xicamera = command.new('xicamera')
+local xicam = command.new('xicam')
 
 -- define chat functions 
 enumerable.all({camera, cam,  xicamera, xicam}, function(cmd)
@@ -280,14 +246,7 @@ enumerable.all({camera, cam,  xicamera, xicam}, function(cmd)
     enumerable.all({'help', 'h'}, function (fn) cmd:register(fn, displayHelp) end)
     cmd:register('start', startRender)
     cmd:register('stop', stopRender)
-    cmd:register('pauseonevent', setPauseOnEvent, '[pauseOnEvent:one_of(t,true,f,false)]')
 end)
-
-local derp = function()
-    add_text(tostring(memory.cameraDisconnect.isConnected))
-end
-
-cam:register('junk', derp)
 
 --TODO replace with unload event
 gc_global = ffi_new('int*')

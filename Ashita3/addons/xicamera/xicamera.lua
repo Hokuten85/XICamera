@@ -10,35 +10,10 @@ require 'common'
 local default_config =
 {
     distance    = 6,
-    cameraSpeed = 1.0,
-    pauseOnEvent = true
+    cameraSpeed = 1.0
 };
 local configs = default_config;
 local readyToRender = false
-
-local getPlayerPtr = function()
-    local entity_map = AshitaCore:GetPointerManager():GetPointer('entitymap');
-    if (entity_map == 0) then
-        return nil;
-    end
-    -- Locate the player pointer..
-    return ashita.memory.read_uint32(ashita.memory.read_uint32(entity_map) + (4 * GetPlayerEntity().TargetIndex));
-end
-
-local player = getPlayerPtr()
-local runOnEvent = function()
-    if not configs.pauseOnEvent then
-        return true
-    end
-
-    if (player == nil) then
-        return false;
-    end
-    
-    local eventPointer = ashita.memory.read_uint32(player + 0xD4)
-    return not (eventPointer ~= 0)
-end
-
 ----------------------------------------------------------------------------------------------------
 -- Variables
 ----------------------------------------------------------------------------------------------------
@@ -54,11 +29,12 @@ local codeCaveValues = {
     0xE9, 0x00, 0x00, 0x00, 0x00 -- jmp to return point
 }
 
-local rootCameraAddress = 0
 local cameraSpeedAdjustment
 local codeCave
 local caveJmpCavePoint
 local pointerToCamera
+local cameraConnectPtr
+local firstPersonPtr
 
 ----------------------------------------------------------------------------------------------------
 -- func: load
@@ -98,13 +74,25 @@ ashita.register_event('load', function()
     
     pointerToCamera = ashita.memory.read_uint32(pointerToCameraPointer + 0x0D);
     if (pointerToCamera == 0) then error('Failed to locate critical signature #3!'); end
-    
+
+    local cameraConnectSig = ashita.memory.find('FFXiMain.dll', 0, '80A0B2000000FBC605????????00', 0x09, 0);
+    if (cameraConnectSig == 0) then error('Failed to locate critical signature #4!') end
+    cameraConnectPtr = ashita.memory.read_uint32(cameraConnectSig);
+    if (cameraConnectPtr == 0) then error('Failed to locate critical signature #5!') end
+
+    local firstPersonSig = ashita.memory.find('FFXiMain.dll', 0, '8BCFE8????????8B0D????????E8????????8BE885ED750CB9', 0x19, 0);
+    if (firstPersonSig == 0) then error('Failed to locate critical signature #6!') end
+    firstPersonPtr = ashita.memory.read_uint32(firstPersonSig);
+    if (firstPersonPtr == 0) then error('Failed to locate critical signature #7!') end
+
     readyToRender = true
 end);
 
 ashita.register_event('prerender', function()
-    if pointerToCamera ~= 0 and runOnEvent() and readyToRender then
-        rootCameraAddress = ashita.memory.read_uint32(pointerToCamera);
+    local cameraIsConnected = ashita.memory.read_uint8(cameraConnectPtr);
+    local isFirstPerson = ashita.memory.read_uint8(firstPersonPtr + 0x28);
+    if readyToRender and pointerToCamera ~= 0 and cameraIsConnected == 1 and isFirstPerson == 0 then
+        local rootCameraAddress = ashita.memory.read_uint32(pointerToCamera);
 
         if rootCameraAddress ~= 0 then
             local focal_x = ashita.memory.read_float(rootCameraAddress + 0x50)
@@ -126,9 +114,6 @@ end);
 
 ashita.register_event('incoming_packet', function(id, size, packet, packet_modified, blocked)
     if id == 0x00A then -- zone in packet
-        ashita.timer.once(5, function()
-            player = getPlayerPtr()
-        end)
         readyToRender = true
     elseif (id == 0x04B) then -- logout acknowledgment
         readyToRender = false
@@ -157,29 +142,9 @@ ashita.register_event('command', function(command, ntype)
             readyToRender = true
         elseif (command_args[2] == 'stop')  then
             readyToRender = false
-        elseif (command_args[2] == 'pauseonevent')  then
-            local newSetting
-            if table.hasvalue({'true', 't'}, command_args[3]) then
-                newSetting = true
-            elseif table.hasvalue({'false', 'f'}, command_args[3]) then
-                newSetting = false
-            elseif command_args[3] == nil then
-                newSetting = not configs.pauseOnEvent
-            end
-            
-            if newSetting ~= nil then
-                configs.pauseOnEvent = newSetting
-                ashita.settings.save(_addon.path .. '/settings/settings.json', configs);
-                print("Pause on event setting changed to " .. tostring(configs.pauseOnEvent))
-            end
         elseif table.hasvalue({'help', 'h'}, command_args[2]) then
             print("Set Distance: </camera|/cam> <distance|d> <###>")
-            print("Set Pause on event: </camera|/cam> <pauseonevent> [t|true|f|false]")
             print("Start/Stop: </camera|/cam> <start|stop>")
-        elseif command_args[2] == 'derp' then
-            local player = getPlayerPtr()
-            local eventPointer = ashita.memory.read_uint32(player + 0xD4)
-            print(tostring(eventPointer))
         end
     end
 
