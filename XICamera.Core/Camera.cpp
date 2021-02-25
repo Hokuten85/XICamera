@@ -4,18 +4,27 @@
 #include <algorithm>
 #include "functions.h"
 
+#include <iostream>
+#include <fstream>
+#include <stdio.h>
+using namespace std;
+
 namespace XICamera
 {
 	namespace Core
 	{
 		Camera* Camera::s_instance = nullptr;
 
+		DWORD g_pointerToCamera;
 		DWORD g_CameraAddress; // Camera address to identify where to start injecting.
 		DWORD g_CameraSpeedReturnAddress; // Camera Speed return address to allow the code cave to return properly.
 		DWORD g_SpeedAddress; // Camera Speed address to identify where to start injecting.
 		//DWORD g_MaxCameraAddress; // Camera Max distance address to identify where to start injecting.
 		//DWORD g_MaxCameraBattleAddress; // Camera Max distance in Battle address to identify where to start injecting.
 		float g_cameraMoveSpeed;
+		DWORD g_CameraConnect;
+		DWORD g_isFirstPerson;
+		ofstream myfile;
 
 		Camera& Camera::instance(void)
 		{
@@ -32,11 +41,13 @@ namespace XICamera
 			m_cameraSet = false;
 			m_cameraDistance = 6.0f;
 			g_cameraMoveSpeed = 0.0f;
+			myfile.open("C:\\camera.log");
 		}
 
 		Camera::~Camera()
 		{
 			removeCamera(); // just in case
+			myfile.close();
 		}
 
 		/**
@@ -56,13 +67,40 @@ namespace XICamera
 
 		bool Camera::getCameraAddress(void) 
 		{
-			const auto pointerToCameraPointer = (DWORD)XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xC8\xE8\x78\x01\x00\x00\xEB\x02\x33\xC0\x8B\xC8\xA3", "xxxxxxxxxxxxx");
+			const auto pointerToCameraPointer = (DWORD)XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\x83\xC4\x04\x85\xC9\x74\x11\x8B\x11\x6A\x01\xFF\x52\x18\xC7\x05", "xxxxxxxxxxxxxxxx");
 			if (pointerToCameraPointer != 0)
 			{
-				const auto pointerToCamera = *(DWORD*)(pointerToCameraPointer + 0x0D);
-				if (pointerToCamera != 0) {
-					g_CameraAddress = *(DWORD*)(pointerToCamera);
+				g_pointerToCamera = *(DWORD*)(pointerToCameraPointer + 0x10);
+				if (g_pointerToCamera != 0) {
+					g_CameraAddress = *(DWORD*)(g_pointerToCamera);
 					return g_CameraAddress != 0;
+				}
+			}
+
+			return false;
+		}
+
+		bool Camera::getCameraConnect(void)
+		{
+			const auto cameraConnectSig = (DWORD)XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\x80\xA0\xB2\x00\x00\x00\xFB\xC6\x05\xFF\xFF\xFF\xFF\x00", "xxxxxxxxx????x");
+			if (cameraConnectSig != 0)
+			{
+				g_CameraConnect = *(DWORD*)(cameraConnectSig + 0x09);
+				return g_CameraConnect != 0;
+			}
+
+			return false;
+		}
+
+		bool Camera::getFollow(void)
+		{
+			const auto firstPersonSig = (DWORD)XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\x8B\xCF\xE8\xFF\xFF\xFF\xFF\x8B\x0D\xFF\xFF\xFF\xFF\xE8\xFF\xFF\xFF\xFF\x8B\xE8\x85\xED\x75\x0C\xB9", "xxx????xx????x????xxxxxxx");
+			if (firstPersonSig != 0)
+			{
+				const auto firstPersonPtr = *(DWORD*)(firstPersonSig + 0x19);
+				if (firstPersonPtr != 0) {
+					g_isFirstPerson = firstPersonPtr + 0x28;
+					return g_isFirstPerson != 0;
 				}
 			}
 
@@ -74,8 +112,16 @@ namespace XICamera
 			if (m_cameraSet == false)
 			{
 				m_cameraSet = getCameraAddress();
-
+				
 				if (m_cameraSet == false) {
+					return false;
+				}
+
+				if (!getCameraConnect()) {
+					return false;
+				}
+
+				if (!getFollow()) {
 					return false;
 				}
 
@@ -123,23 +169,35 @@ namespace XICamera
 			return true;
 		}
 
+		struct camera_t
+		{
+			float X;
+			float Z;
+			float Y;
+			float FocalX;
+			float FocalZ;
+			float FocalY;
+		};
+
 		bool Camera::changeDistance(void)
 		{
-			const auto focal_x = *(FLOAT*)(g_CameraAddress + 0x50);
-			const auto focal_z = *(FLOAT*)(g_CameraAddress + 0x54);
-			const auto focal_y = *(FLOAT*)(g_CameraAddress + 0x58);
+			auto cameraAddress = *(DWORD*)(g_pointerToCamera);
+			auto isConnected = *(BOOL*)(g_CameraConnect);
+			auto isFirstPerson = *(BOOL*)(g_isFirstPerson);
 
-			const auto diff_x = *(FLOAT*)(g_CameraAddress + 0x44) - focal_x;
-			const auto diff_z = *(FLOAT*)(g_CameraAddress + 0x48) - focal_z;
-			const auto diff_y = *(FLOAT*)(g_CameraAddress + 0x4C) - focal_y;
-
-			const auto distance = 1 / sqrtf(diff_x * diff_x + diff_z * diff_z + diff_y * diff_y) * m_cameraDistance;
-
-			if (distance > 3)
+			if (isConnected == 1 && isFirstPerson == 0 && cameraAddress != 0)
 			{
-				*(FLOAT*)(g_CameraAddress + 0x44) = diff_x * distance + focal_x;
-				*(FLOAT*)(g_CameraAddress + 0x48) = diff_z * distance + focal_z;
-				*(FLOAT*)(g_CameraAddress + 0x4C) = diff_y * distance + focal_y;
+				auto camera = *(camera_t*)(cameraAddress + 0x44);
+
+				const auto diff_x = camera.X - camera.FocalX;
+				const auto diff_z = camera.Z - camera.FocalZ;
+				const auto diff_y = camera.Y - camera.FocalY;
+
+				const auto distance = 1 / sqrtf(diff_x * diff_x + diff_z * diff_z + diff_y * diff_y) * m_cameraDistance;
+					
+				*(FLOAT*)(cameraAddress + 0x44) = diff_x * distance + camera.FocalX;
+				*(FLOAT*)(cameraAddress + 0x48) = diff_z * distance + camera.FocalZ;
+				*(FLOAT*)(cameraAddress + 0x4C) = diff_y * distance + camera.FocalY;
 			}
 
 			return true;

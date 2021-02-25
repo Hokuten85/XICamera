@@ -1,5 +1,5 @@
 --[[
- 	Copyright © 2019, Kelly Grant-Leanna
+ 	Copyright © 2019, Hokuten
  	All rights reserved.
  
  	Redistribution and use in source and binary forms, with or without

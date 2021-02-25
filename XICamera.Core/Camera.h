@@ -15,6 +15,8 @@ namespace XICamera
 			virtual ~Camera(void);
 
 			bool getCameraAddress(void);
+			bool getCameraConnect(void);
+			bool getFollow(void);
 			bool setupCamera(void);
 			bool removeCamera(void);
 

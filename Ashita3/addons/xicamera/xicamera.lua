@@ -68,11 +68,11 @@ ashita.register_event('load', function()
     ashita.memory.write_uint8(caveJmpCavePoint, 0xE9)
     ashita.memory.write_int32(caveJmpCavePoint + 0x01, (codeCave - caveJmpCavePoint - 0x05))
     ashita.memory.write_uint8(caveJmpCavePoint + 0x05, 0x90)
-    
-    local pointerToCameraPointer = ashita.memory.findpattern('FFXiMain.dll', 0, 'C8E878010000EB0233C08BC8A3', 0, 0);
+
+    local pointerToCameraPointer = ashita.memory.findpattern('FFXiMain.dll', 0, '83C40485C974118B116A01FF5218C705', 0, 0);
     if (pointerToCameraPointer == 0) then error('Failed to locate critical signature #2!'); end
     
-    pointerToCamera = ashita.memory.read_uint32(pointerToCameraPointer + 0x0D);
+    pointerToCamera = ashita.memory.read_uint32(pointerToCameraPointer + 0x10);
     if (pointerToCamera == 0) then error('Failed to locate critical signature #3!'); end
 
     local cameraConnectSig = ashita.memory.find('FFXiMain.dll', 0, '80A0B2000000FBC605????????00', 0x09, 0);
