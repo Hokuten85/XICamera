@@ -154,7 +154,7 @@ local vector_3f = struct({
 })
 local camera = struct({
     position = {0x44, vector_3f},
-    focal    = {0x44, vector_3f}
+    focal    = {0x50, vector_3f}
 })
 memory.pointerToCamera = struct({signature = '83C40485C974118B116A01FF5218C705*'}, {
     camera = {0x0, ptr(camera)}
