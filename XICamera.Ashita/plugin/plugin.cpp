@@ -26,65 +26,28 @@
  * 	SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "WindowerInterface.h"
+#include "AshitaInterface.h"
 
-namespace XICamera
-{
-	int WindowerInterface::registerInterface(lua_State *L)
+extern "C" {
+	double __stdcall GetInterfaceVersion(void)
 	{
-		struct luaL_reg api[] = {
-			{ "enable"         , WindowerInterface::lua_enable },
-			{ "disable"        , WindowerInterface::lua_disable },
- 
-			{ "set_camera_distance"  , WindowerInterface::lua_setCameraDistance },
-
-			{ "diagnostics"    , WindowerInterface::lua_getDiagnostics },
-
-			{ NULL, NULL }
-		};
-
-		luaL_register(L, "_XICamera", api);
-		return 1;
+		return ASHITA_INTERFACE_VERSION;
 	}
 
-	int WindowerInterface::lua_enable(lua_State *L)
+	void __stdcall CreatePluginInfo(plugininfo_t *info)
 	{
-		lua_pushboolean(L, instance().setupRedirect() ? TRUE : FALSE);
-		return 1;
+		XICamera::AshitaInterface::s_pluginInfo = info;
+
+		strcpy_s(info->Author, sizeof(info->Author), "Hokuten");
+		strcpy_s(info->Name, sizeof(info->Name), "XICamera");
+
+		info->InterfaceVersion = ASHITA_INTERFACE_VERSION;
+		info->PluginVersion = 0.01f;
+		info->Priority = 0;
 	}
 
-	int WindowerInterface::lua_disable(lua_State *L)
+	IPlugin* __stdcall CreatePlugin(void)
 	{
-		lua_pushboolean(L, instance().removeRedirect() ? TRUE : FALSE);
-		return 1;
-	}
-
-	int WindowerInterface::lua_setCameraDistance(lua_State *L)
-	{
-		if (lua_gettop(L) != 1 || !lua_isnumber(L, 1))
-		{
-			lua_pushstring(L, "a valid distance argument is required");
-			lua_error(L);
-		}
-
-		instance().setCameraDistance(lua_tonumber(L, 1));
-
-		lua_pushnumber(L, instance().cameraDistance());
-		return 1;
-	}
-
-	int WindowerInterface::lua_getDiagnostics(lua_State *L)
-	{
-		/* push a table to hold the diagnostics as a whole */
-		lua_createtable(L, 1, 2);
-
-		lua_pushboolean(L, instance().redirectActive() ? TRUE : FALSE);
-		lua_setfield(L, -2, "enabled");
-
-		lua_pushnumber(L, instance().cameraDistance());
-		lua_setfield(L, -2, "cameraDistance");
-
-		return 1;
+		return static_cast<IPlugin*>(new XICamera::AshitaInterface());
 	}
 }
-

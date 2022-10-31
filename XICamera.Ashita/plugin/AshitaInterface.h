@@ -26,65 +26,72 @@
  * 	SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "WindowerInterface.h"
+#pragma once
+
+#include <string>
+#include "ADK/Ashita.h"
+#include "Redirector.h"
 
 namespace XICamera
 {
-	int WindowerInterface::registerInterface(lua_State *L)
+	class AshitaInterface : public IPlugin, public Core::ILogProvider, private Core::Redirector
 	{
-		struct luaL_reg api[] = {
-			{ "enable"         , WindowerInterface::lua_enable },
-			{ "disable"        , WindowerInterface::lua_disable },
- 
-			{ "set_camera_distance"  , WindowerInterface::lua_setCameraDistance },
 
-			{ "diagnostics"    , WindowerInterface::lua_getDiagnostics },
+	public:
+		AshitaInterface(void);
+		virtual ~AshitaInterface(void) {};
 
-			{ NULL, NULL }
+		/* Ashita plugin requirements */
+
+		plugininfo_t GetPluginInfo(void) override;
+
+		bool Initialize(IAshitaCore *core, ILogManager *log, uint32_t id) override;
+		void Release(void);
+
+		bool HandleCommand(const char *command, int32_t type) override;
+
+		/* ILogProvider */
+		void logMessage(Core::ILogProvider::LogLevel level, std::string msg);
+		void logMessageF(Core::ILogProvider::LogLevel level, std::string msg, ...);
+
+	public:
+		static plugininfo_t *s_pluginInfo;
+
+	private:
+		/* a little wrapper around Write() and Writef() with support for colours */
+		void chatPrint(const char *msg);
+		void chatPrintf(const char *fmt, ...);
+
+		struct Settings
+		{
+			Settings();
+
+			bool load(IConfigurationManager *config);
+			void save(IConfigurationManager *config);
+
+			bool debugLog;
+			int cameraDistance;
 		};
 
-		luaL_register(L, "_XICamera", api);
-		return 1;
-	}
+		Settings               m_settings;
 
-	int WindowerInterface::lua_enable(lua_State *L)
-	{
-		lua_pushboolean(L, instance().setupRedirect() ? TRUE : FALSE);
-		return 1;
-	}
+		/* UI state */
+		bool                     m_showConfigWindow;
 
-	int WindowerInterface::lua_disable(lua_State *L)
-	{
-		lua_pushboolean(L, instance().removeRedirect() ? TRUE : FALSE);
-		return 1;
-	}
-
-	int WindowerInterface::lua_setCameraDistance(lua_State *L)
-	{
-		if (lua_gettop(L) != 1 || !lua_isnumber(L, 1))
+		struct
 		{
-			lua_pushstring(L, "a valid distance argument is required");
-			lua_error(L);
-		}
+			bool        debugState;
+			bool		removeRedirect;
+			bool        setRedirect;
+		} m_uiConfig;
 
-		instance().setCameraDistance(lua_tonumber(L, 1));
+		/* Ashita runtime data */
+		uint32_t               m_pluginId;
 
-		lua_pushnumber(L, instance().cameraDistance());
-		return 1;
-	}
-
-	int WindowerInterface::lua_getDiagnostics(lua_State *L)
-	{
-		/* push a table to hold the diagnostics as a whole */
-		lua_createtable(L, 1, 2);
-
-		lua_pushboolean(L, instance().redirectActive() ? TRUE : FALSE);
-		lua_setfield(L, -2, "enabled");
-
-		lua_pushnumber(L, instance().cameraDistance());
-		lua_setfield(L, -2, "cameraDistance");
-
-		return 1;
-	}
+		IAshitaCore           *m_ashitaCore;
+		ILogManager           *m_logManager;
+		IDirect3DDevice8      *m_direct3DDevice;
+		IConfigurationManager *m_config;
+	};
 }
 
