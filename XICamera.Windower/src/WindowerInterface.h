@@ -36,14 +36,14 @@ extern "C"
 #	include "lua.h"
 }
 
-#include "Camera.h"
+#include "Redirector.h"
 
 namespace XICamera
 {
 	/* a simple, mostly static interface addon-on to
 	 * provide interopperability with the LUA-C API 
 	 */
-	class WindowerInterface : public Core::Camera
+	class WindowerInterface : public Core::Redirector
 	{
 		public:
 			~WindowerInterface(void) {};
@@ -52,42 +52,42 @@ namespace XICamera
 
 			/* interface methods */
 
-			/* internally calls Camera::setupHooks
+			/* internally calls Redirector::setupHooks
 			 *
 			 * arguments: none
 			 * returns: a boolean indicating the operation result
 			 */
 			static int lua_enable(lua_State *L);
 
-			/* internally calls Camera::removeHooks
+			/* internally calls Redirector::removeHooks
 			 *
 			 * arguments: none
 			 * returns: a boolean representing the operation result
 			 */
 			static int lua_disable(lua_State *L);
 
-			/* internally calls Camera::setCameraDistance
+			/* internally calls Redirector::setCameraDistance
 			 *
 			 * arguments: [1] - int: newDistance
 			 * returns: a boolean representing the operation result
 			 */
 			static int lua_setCameraDistance(lua_State *L);
 
-			/* collects some of the internal data of the Redirector
+
+			/* collects some of the internal data of the Redirector 
 			 *
 			 * arguments: none
 			 * returns: a table of the following make-up
-			 *  {
+			 *  { 
 			 *		"enabled": <boolean>,
-			 *      "camera distance": <int>
+			 *      "root_path": <string>,
+			 *      "overlays": { <string>, <string>, ... }
 			 *  }
 			 */
-			static int lua_getDiagnostics(lua_State* L);
-
-			static int lua_changeDistance(lua_State* L);
+			static int lua_getDiagnostics(lua_State *L);
 
 		protected:
-			WindowerInterface(void) : Camera() {};
+			WindowerInterface(void) : Redirector() {};
 	};
 }
 
