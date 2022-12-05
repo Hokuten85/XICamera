@@ -4,7 +4,7 @@ XICamera is an addon that allows to change the camera distance.
 
 ## Compatibility
 
-XICamera works together with [Ashita v3](https://www.ashitaxi.com) as well as [Windower 4](http://www.windower.net).
+XICamera works together with [Ashita v3](https://www.ashitaxi.com) as well as [Windower 4](http://www.windower.net). There are releases for Ashita v4 and Windower 5, but I have done extremely minimal testing.
 
 ## Installation
 
