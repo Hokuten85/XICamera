@@ -31,9 +31,3 @@ I'd also like to thank the Darkstar Project and Xiloader team. The code injectio
 ## Support/Contributions
 
 Feedback through Github issues and or the ffxiah forums is appreciated.
-
-If you'd like to donate, please contribute to my father's Go Fund Me page.
-
-[![Go Fund Me](https://i.imgur.com/XNg4kmf.png)](https://www.gofundme.com/f/g2-kevins-medical-fund?utm_source=customer&utm_medium=copy_link-tip&utm_campaign=p_cp+share-sheet)
-
-[![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=FX6H5QU8NTC2J&currency_code=USD)
