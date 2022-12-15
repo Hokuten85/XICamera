@@ -1,36 +1,20 @@
 addon.author   = 'Hokuten';
 addon.name     = 'xicamera';
-addon.version  = '0.0.1';
+addon.version  = '0.7.0';
 addon.desc     = 'Modifies the camera distance from the player.';
 
 local common = require('common');
-local ffi = require('ffi');
-local ffi_new = ffi.new
-local ffi_gc = ffi.gc
-local ffi_cast = ffi.cast
-
-ffi.cdef[[
-    struct camera_t
-    {
-        uint8_t Unknown0000[0x44];
-        float X;
-        float Z;
-        float Y;
-        float FocalX;
-        float FocalZ;
-        float FocalY;
-    };
-]]
+local settings = require('settings');
 
 ----------------------------------------------------------------------------------------------------
 -- Configurations
 ----------------------------------------------------------------------------------------------------
 local default_settings = T{
     distance    = 6,
-    cameraSpeed = 1.0
+    cameraSpeed = 1.0,
+	battleDistance = 8.2
 };
-local settings = default_settings;
-local readyToRender = false
+local configs = settings.load(default_settings);
 
 ----------------------------------------------------------------------------------------------------
 -- Variables
@@ -50,56 +34,62 @@ local codeCaveValues = {
 local speedAdjustment
 local codeCave
 local injectionPoint
-local ptrToCamera
-local baseCameraAddress
-local cameraIsConnected
-local follow
+
+local minDistancePtr
+local originalMinDistance
+
+local maxDistancePtr
+local originalMaxDistance
+
+local minBattleDistancePtr
+local originalMinBattleDistance
+
+local maxBattleDistancePtr
+local originalMaxBattleDistance
+
+local zoomSetupSig
+local originalMinDistancePtr
+local newMinDistanceConstant
+
 
 ----------------------------------------------------------------------------------------------------
 -- config helpers
 ----------------------------------------------------------------------------------------------------
-
 --[[
-* Load an existing addon configuration and merge it with the provided defaults.
-* Returns the a table containing the merged configuration.
+* Updates the addon settings.
 *
-* @param {defaults} - a table holding the default settings
-]]--
-local load_merged_settings = function(defaults)
-    local config = AshitaCore:GetConfigurationManager();
-    local ini_file = string.format('%s.ini', addon.name);
-    local s = defaults:copy(true);
-    if (config:Load(addon.name, ini_file)) then
-        s.distance     = config:GetFloat(addon.name, 'default', 'distance',     defaults.distance);
-        s.cameraSpeed  = config:GetFloat(addon.name, 'default', 'cameraSpeed',  defaults.cameraSpeed);
+* @param {table} s - The new settings table to use for the addon settings. (Optional.)
+--]]
+local function update_settings(s)
+    -- Update the settings table..
+    if (s ~= nil) then
+        configs = s;
     end
-    return s;
+
+    -- Save the current settings..
+    settings.save();
 end
 
 --[[
-* Save the passed configuration table to disk.
-*
-* @param {data} - the updated settings to store in the addon's ini file
-]]--
-local save_settings = function(data)
-    local config = AshitaCore:GetConfigurationManager();
-    local ini_file = string.format('%s.ini', addon.name);
+* Registers a callback for the settings to monitor for character switches.
+--]]
+settings.register('settings', 'settings_update', update_settings);
 
-    config:Delete(addon.name, ini_file);
-    config:SetValue(addon.name, 'default', 'distance',     tostring(data.distance));
-    config:SetValue(addon.name, 'default', 'cameraSpeed',  tostring(data.cameraSpeed));
-
-    config:Save(addon.name, ini_file);
+local setCameraSpeed = function(newSpeed)
+	configs.cameraSpeed = newSpeed
+    ashita.memory.write_float(speedAdjustment, newSpeed);
 end
 
-local logToFile = function(stringToLog, boolPrint)
-    local file = io.open('\\cameralog.txt', "a");
-    file:write(tostring(stringToLog), "\n");
-    file:close(file);
-    
-    if boolPrint then
-        print(stringToLog)
-    end
+local setCameraDistance = function(newDistance)
+	configs.distance = newDistance
+	ashita.memory.write_float(minDistancePtr, newDistance - (originalMaxDistance - originalMinDistance));
+	ashita.memory.write_float(maxDistancePtr, newDistance);
+end
+
+local setBattleCameraDistance = function(newDistance)
+	configs.battleDistance = newDistance
+	ashita.memory.write_float(minBattleDistancePtr, newDistance - (originalMaxBattleDistance - originalMinBattleDistance));
+	ashita.memory.write_float(maxBattleDistancePtr, newDistance);
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -107,12 +97,9 @@ end
 -- desc: Event called when the addon is being loaded.
 ----------------------------------------------------------------------------------------------------
 ashita.events.register('load', 'camera_load', function()
-    -- Load the configuration file..
-    settings = load_merged_settings(default_settings);
-
     -- Create location to store vertical camera speed adjustment
     speedAdjustment = ashita.memory.alloc(4);
-    ashita.memory.write_float(speedAdjustment, settings.cameraSpeed);
+    ashita.memory.write_float(speedAdjustment, configs.cameraSpeed);
     
     -- Create code cave to adjust vertical camera move speed
     codeCave = ashita.memory.alloc(17);
@@ -134,57 +121,57 @@ ashita.events.register('load', 'camera_load', function()
     ashita.memory.write_uint8(injectionPoint, 0xE9)
     ashita.memory.write_int32(injectionPoint + 0x01, (codeCave - injectionPoint - 0x05))
     ashita.memory.write_uint8(injectionPoint + 0x05, 0x90)
-    
-    local pointerToCameraPointer = ashita.memory.find('FFXiMain.dll', 0, '83C40485C974118B116A01FF5218C705', 0, 0);
-        if (pointerToCameraPointer == 0) then error('Failed to locate critical signature #2!'); end
+	
+	--GET MIN CAMERA DISTANCE
+	local minDistanceSig = ashita.memory.find('FFXiMain.dll', 0, 'D9442410D81DC02B', 0, 0);
+	if (minDistanceSig == 0) then error('Failed to locate minDistanceSig!'); end
+	
+	minDistancePtr = ashita.memory.read_uint32(minDistanceSig + 0x06);
+	originalMinDistance = ashita.memory.read_float(minDistancePtr)
+	ashita.memory.unprotect(minDistancePtr, 4)
+	
+	--GET MAX CAMERA DISTANCE
+	local maxDistanceSig = ashita.memory.find('FFXiMain.dll', 0, 'D9442410D8257032', 0, 0);
+	if (maxDistanceSig == 0) then error('Failed to locate maxDistanceSig!'); end
+	
+	maxDistancePtr = ashita.memory.read_uint32(maxDistanceSig + 0x06);
+	originalMaxDistance = ashita.memory.read_float(maxDistancePtr)
+	ashita.memory.unprotect(maxDistancePtr, 4)
+	
+	-- GET MIN BATTLE DISTANCE
+	local minBattleDistanceSig = ashita.memory.find('FFXiMain.dll', 0, 'D8442424D9053032', 0, 0);
+	if (minBattleDistanceSig == 0) then error('Failed to locate minBattleDistanceSig!'); end
+	
+	minBattleDistancePtr = ashita.memory.read_uint32(minBattleDistanceSig + 0x06);
+	originalMinBattleDistance = ashita.memory.read_float(minBattleDistancePtr)
+	ashita.memory.unprotect(minBattleDistancePtr, 4)
+	
+	-- GET MAX BATTLE DISTANCE
+	local battleMaxDistanceSig = ashita.memory.find('FFXiMain.dll', 0, 'D95C2450D8052C32', 0, 0);
+	if (battleMaxDistanceSig == 0) then error('Failed to locate battleMaxDistanceSig!'); end
+	
+	maxBattleDistancePtr = ashita.memory.read_uint32(battleMaxDistanceSig + 0x06);
+	originalMaxBattleDistance = ashita.memory.read_float(maxBattleDistancePtr)
+	ashita.memory.unprotect(maxBattleDistancePtr, 4)
+	
+	-- GET LOCATION OF ZOOM LENSE SETUP
+	zoomSetupSig = ashita.memory.find('FFXiMain.dll', 0, 'D9442404D80D6C2B????D80D', 0, 0);
+	if (zoomSetupSig == 0) then error('Failed to locate zoomSetupSig!'); end
+	
+	originalMinDistancePtr = ashita.memory.read_uint32(zoomSetupSig + 0x0C);
+	newMinDistanceConstant = ashita.memory.alloc(4);
+    ashita.memory.write_float(newMinDistanceConstant, originalMinDistance);
+	
+	-- Write new memloc to zoom setup function to fix zone-in bug
+	ashita.memory.write_uint32(zoomSetupSig + 0x0C, newMinDistanceConstant);
+	
+	-- SET CAMERA DISTANCE BASED ON configs
+	setCameraDistance(configs.distance)
+	
+	-- SET BATTLE DISTANCE BASED ON configs
+	setBattleCameraDistance(configs.battleDistance)
 
-    ptrToCamera = ashita.memory.read_uint32(pointerToCameraPointer + 0x10);
-    if (ptrToCamera == 0) then error('Failed to locate critical signature #3!'); end
-
-    baseCameraAddress = ffi_cast('uint32_t*', ptrToCamera);
-
-    local cameraConnectSig = ashita.memory.find('FFXiMain.dll', 0, '80A0B2000000FBC605????????00', 0x09, 0);
-    if (cameraConnectSig == 0) then error('Failed to locate critical signature #4!') end
-    local cameraConnectPtr = ashita.memory.read_uint32(cameraConnectSig);
-    if (cameraConnectPtr == 0) then error('Failed to locate critical signature #5!') end
-    cameraIsConnected = ffi_cast('bool*', cameraConnectPtr);
-    
-    follow = AshitaCore:GetMemoryManager():GetAutoFollow();
-
-    readyToRender = true
 end);
-
-ashita.events.register('d3d_beginscene', 'camera_beginscene', function(isRenderingBackBuffer)
-    if readyToRender and isRenderingBackBuffer and baseCameraAddress[0] ~= nil and cameraIsConnected[0] and follow:GetIsFirstPersonCamera() == 0 then
-        local camera = ffi_cast('struct camera_t*', baseCameraAddress[0])
-        if camera ~= nil then
-            local diff_x = camera.X - camera.FocalX
-            local diff_z = camera.Z - camera.FocalZ
-            local diff_y = camera.Y - camera.FocalY
-            
-            local distance = 1 / math.sqrt(diff_x * diff_x + diff_z * diff_z + diff_y * diff_y) * settings.distance
-            
-            camera.X = diff_x * distance + camera.FocalX
-            camera.Z = diff_z * distance + camera.FocalZ
-            camera.Y = diff_y * distance + camera.FocalY
-        end
-    end
-end);
-
-ashita.events.register('packet_in', 'packet_in_callback1', function(e)
-    if e.id == 0x00A then -- zone in packet
-        readyToRender = true
-    elseif e.id == 0x04B then -- logout acknowledgment
-        readyToRender = false
-    end
-
-    return false
-end);
-
-local setCameraSpeed = function(newSpeed)
-    ashita.memory.write_float(speedAdjustment, newSpeed);
-    settings.cameraSpeed = newSpeed
-end
 
 ashita.events.register('command', 'camera_command', function(e)
     local command_args = e.command:lower():args()
@@ -192,15 +179,18 @@ ashita.events.register('command', 'camera_command', function(e)
         if table.contains({'distance', 'd'}, command_args[2]) then
             if (tonumber(command_args[3])) then
                 local newDistance = tonumber(command_args[3])
-                settings.distance = newDistance
+                setCameraDistance(newDistance)
                 setCameraSpeed(newDistance / 6.0)
-                save_settings(settings);
+                update_settings()
                 print("Distance changed to " .. newDistance)
             end
-        elseif (command_args[2] == 'start')  then
-            readyToRender = true
-        elseif (command_args[2] == 'stop')  then
-            readyToRender = false
+		elseif table.contains({'battle', 'b'}, command_args[2]) then
+            if (tonumber(command_args[3])) then
+                local newDistance = tonumber(command_args[3])
+				setBattleCameraDistance(newDistance)
+                update_settings()
+                print("Battle distance changed to " .. newDistance)
+            end	
         elseif table.contains({'help', 'h'}, command_args[2]) then
             print("Set Distance: </camera|/cam> <distance|d> <###>")
             print("Start/Stop: </camera|/cam> <start|stop>")
@@ -223,6 +213,24 @@ local restorePointers = function()
         ashita.memory.dealloc(codeCave, 17)
         codeCave = nil
     end
+	
+	if (minDistancePtr ~= 0 and minDistancePtr ~= nil) then
+		ashita.memory.write_float(minDistancePtr, originalMinDistance)
+	end
+	if (maxDistancePtr ~= 0 and maxDistancePtr ~= nil) then
+		ashita.memory.write_float(maxDistancePtr, originalMaxDistance)
+	end
+	if (minBattleDistancePtr ~= 0 and minBattleDistancePtr ~= nil) then
+		ashita.memory.write_float(minBattleDistancePtr, originalMinBattleDistance)
+	end
+	if (battleMaxDistancePtr ~= 0 and battleMaxDistancePtr ~= nil) then
+		ashita.memory.write_float(maxBattleDistancePtr, originalMaxBattleDistance)
+	end
+	
+	if (zoomSetupSig ~= 0 and zoomSetupSig ~= nil) then
+		ashita.memory.write_uint32(zoomSetupSig + 0x0C, originalMinDistancePtr)
+		ashita.memory.dealloc(newMinDistanceConstant, 4)
+	end
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -231,10 +239,6 @@ end
 ----------------------------------------------------------------------------------------------------
 ashita.events.register('unload', 'camera_unload', function()
     -- Save the configuration file..
-    save_settings(settings);
+    update_settings()
     restorePointers();
 end);
-
---TODO replace with unload event
-gc_global = ffi.new('int*');
-ffi_gc(gc_global, restorePointers);
