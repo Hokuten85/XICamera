@@ -62,22 +62,45 @@ local HeapDestroy = win32.def({
     },
     failure = false
 })
+local VirtualProtect = win32.def({
+    name = 'VirtualProtect',
+    returns = 'bool',
+    parameters = {
+        'void*',
+        'size_t',
+        'DWORD',
+        'PDWORD'
+    },
+    failure = false
+})
 
 local defaults = {
     distance = 6,
-    cameraSpeed = 1.0
+    cameraSpeed = 1.0,
+    battleDistance = 8.2
 }
 local options = settings.load(defaults)
-local readyToRender = false
 
-local logToFile = function(stringToLog, boolPrint)
-    local file = io.open(windower.user_path .. '\\cameralog.txt', "a");
-    file:write(tostring(stringToLog), "\n");
-    file:close(file);
-    
-    if boolPrint then
-        print(stringToLog)
-    end
+local minDistance
+local originalMinDistance
+local maxDistance
+local originalMaxDistance
+local minBattleDistance
+local originalMinBattleDistance
+local maxBattleDistance
+local originalMaxBattleDistance
+local zoomOnZoneInSetup
+
+local setCameraDistance = function(newDistance)
+	options.distance = newDistance
+	minDistance.val = newDistance - (originalMaxDistance - originalMinDistance)
+	maxDistance.val = newDistance
+end
+
+local setBattleCameraDistance = function(newDistance)
+	options.battleDistance = newDistance
+	minBattleDistance.val = newDistance - (originalMaxBattleDistance - originalMinBattleDistance)
+	maxBattleDistance.val = newDistance
 end
 
 --###################################################
@@ -101,138 +124,151 @@ local try = function(d, e)
     end
     return d
 end
- --Create memory location to store Code Cave
- local codeCaveHeap = try(ffi_gc(HeapCreate(0x40000, 0, 0), function(heap)
-     destroyed = true
-     HeapDestroy(codeCaveHeap)
- end), {ErrorMsg = "Failed to create memory location for code cave."})
 
- -- Allocate the space for the Code Cave
- local codeCave = ffi_cast('uint8_t*', try(HeapAlloc(codeCaveHeap, 8, 17), {ErrorMsg = "Failed to allocate memory for code cave."}))
+--Create memory location to store Code Cave
+local codeCaveHeap = try(ffi_gc(HeapCreate(0x40000, 0, 0), function(heap)
+    destroyed = true
+    HeapDestroy(codeCaveHeap)
+end), {ErrorMsg = "Failed to create memory location for code cave."})
 
- -- Populate general structure of code cave
- for i = 1, #codeCaveValues do
-     codeCave[i-1] = codeCaveValues[i]
- end
+-- Allocate the space for the Code Cave
+local codeCave = ffi_cast('uint8_t*', try(HeapAlloc(codeCaveHeap, 8, 17), {ErrorMsg = "Failed to allocate memory for code cave."}))
 
- -- Create memory location to store Camera Speed
- local cameraSpeedAdjustmentHeap = try(ffi_gc(HeapCreate(0x40000, 0, 0), function(heap)
-     destroyed = true
-     HeapDestroy(cameraSpeedAdjustmentHeap)
- end), {ErrorMsg = "Failed to create memory location to save speed adjustment"})
+-- Populate general structure of code cave
+for i = 1, #codeCaveValues do
+    codeCave[i-1] = codeCaveValues[i]
+end
 
- -- Allocate and set Camera speed based on settings
-local cameraSpeedAdjustment_Ptr = ffi_cast('float*', try(HeapAlloc(cameraSpeedAdjustmentHeap, 8, ffi.sizeof('float')), {ErrorMsg = "Failed to allocate memory for speed adjustment"}))
-cameraSpeedAdjustment_Ptr[0] = ffi_new('float', options.cameraSpeed)
+-- Create memory location to store Camera Speed
+local cameraSpeedAdjustmentPtr = ffi_new('float*', ffi_new('float[?]', 1))
+cameraSpeedAdjustmentPtr[0] = options.cameraSpeed
 
- -- Push in pointer to Camera Speed into the Code Cave
- local camSpeedInCave = ffi_cast('float**',codeCave + 0x02)
- camSpeedInCave[0] = cameraSpeedAdjustment_Ptr; -- Push cam speed pointer into code cave
+-- Push in pointer to Camera Speed into the Code Cave
+local camSpeedInCave = ffi_cast('float**',codeCave + 0x02)
+camSpeedInCave[0] = cameraSpeedAdjustmentPtr; -- Push cam speed pointer into code cave
 
- -- Get the point where we are injecting code to jump to code cave
- local caveJmpPoint = ffi_cast('uint8_t*', scanner.scan('&D84C24248B168BCED80D'))
+-- Get the point where we are injecting code to jump to code cave
+local caveJmpPoint = ffi_cast('uint8_t*', scanner.scan('&D84C24248B168BCED80D'))
 
- -- Push in pointer to the return point into the Code Cave
-  local returnJmpOffset = ffi_cast('int32_t*', codeCave + 0x0D)
- returnJmpOffset[0] = (caveJmpPoint + 0x06) - (codeCave + 0x0C) - 0x05
+-- Push in pointer to the return point into the Code Cave
+ local returnJmpOffset = ffi_cast('int32_t*', codeCave + 0x0D)
+returnJmpOffset[0] = (caveJmpPoint + 0x06) - (codeCave + 0x0C) - 0x05
 
- -- Get point where we are going to push in Pointer for where the Code Cave is
-  local caveJmpOffset = ffi_cast('int32_t*', caveJmpPoint + 0x01)
+-- Get point where we are going to push in Pointer for where the Code Cave is
+ local caveJmpOffset = ffi_cast('int32_t*', caveJmpPoint + 0x01)
 
- -- Set up the Jump to the Code Cave
- caveJmpPoint[0] = 0xE9
- caveJmpOffset[0] = (codeCave - caveJmpPoint - 0x05)
- caveJmpPoint[5] = 0x90
+-- Set up the Jump to the Code Cave
+caveJmpPoint[0] = 0xE9
+caveJmpOffset[0] = (codeCave - caveJmpPoint - 0x05)
+caveJmpPoint[5] = 0x90
 
 --###################################################
 --# Camera Distance
 --###################################################
-local vector_3f = struct({
-    x = {0x0, float},
-    z = {0x4, float},
-    y = {0x8, float},
+memory.minDistance = struct({signature = 'D9442410D81D*C02B'}, {
+    val = {0x0, float}
 })
-local camera = struct({
-    position = {0x44, vector_3f},
-    focal    = {0x50, vector_3f}
+memory.maxDistance = struct({signature = 'D9442410D825*7032'}, {
+    val = {0x0, float}
 })
-memory.pointerToCamera = struct({signature = '83C40485C974118B116A01FF5218C705*'}, {
-    camera = {0x0, ptr(camera)}
+memory.minBattleDistance = struct({signature = 'D8442424D905*3032'}, {
+    val = {0x0, float}
 })
-memory.cameraConnect = struct({signature = '80A0B2000000FBC605*????????00'}, {
-    isConnected = {0x0, bool}
+memory.maxBattleDistance = struct({signature = 'D95C2450D805*2C32'}, {
+    val = {0x0, float}
 })
 
-local ptrToCamera = memory.pointerToCamera
-local cameraConnect = memory.cameraConnect
-local follow = memory.follow
-readyToRender = true
+minDistance = memory.minDistance
+originalMinDistance = minDistance.val
 
-local coroutine_sleep_frame = coroutine.sleep_frame
-coroutine.schedule(function()
-    while(true) do
-        if readyToRender and ptrToCamera and ptrToCamera.camera ~= nil and cameraConnect.isConnected and not follow.first_person_view then
-            local camera = ptrToCamera.camera
-            local diff_x = camera.position.x - camera.focal.x
-            local diff_z = camera.position.z - camera.focal.z
-            local diff_y = camera.position.y - camera.focal.y
+maxDistance = memory.maxDistance
+originalMaxDistance = maxDistance.val
 
-            local distance = 1 / math.sqrt(diff_x * diff_x + diff_z * diff_z + diff_y * diff_y) * options.distance
-            camera.position.x = diff_x * distance + camera.focal.x
-            camera.position.z = diff_z * distance + camera.focal.z
-            camera.position.y = diff_y * distance + camera.focal.y
-        end
-        coroutine_sleep_frame()
-    end
-end)
+minBattleDistance = memory.minBattleDistance
+originalMinBattleDistance = maxDistance.val
+
+maxBattleDistance = memory.maxBattleDistance
+originalMaxBattleDistance = maxBattleDistance.val
+
+try(VirtualProtect(ffi_cast('void*', minDistance), 4, 0x04, ffi_new('DWORD[?]', 0)), {ErrorMsg = "Failed to remove minDistance Write Protection."})
+try(VirtualProtect(ffi_cast('void*', maxDistance), 4, 0x04, ffi_new('DWORD[?]', 0)), {ErrorMsg = "Failed to remove maxDistance Write Protection."})
+try(VirtualProtect(ffi_cast('void*', minBattleDistance), 4, 0x04, ffi_new('DWORD[?]', 0)), {ErrorMsg = "Failed to remove minBattleDistance Write Protection."})
+try(VirtualProtect(ffi_cast('void*', maxBattleDistance), 4, 0x04, ffi_new('DWORD[?]', 0)), {ErrorMsg = "Failed to remove maxBattleDistance Write Protection."})
+
+--###################################################
+--# Zoom on zone-in setup?
+--###################################################
+zoomOnZoneInSetup = ffi_cast('float**', scanner.scan('D9442404D80D6C2B????D80D&'))
+
+local newMinDistanceConstant = ffi_new('float*', ffi_new('float[?]', 1))
+newMinDistanceConstant[0] = originalMinDistance
+
+zoomOnZoneInSetup[0] = newMinDistanceConstant
+
+--###################################################
+--# SET CAMERA DISTANCE BASED ON options
+--###################################################
+setCameraDistance(options.distance)
+setBattleCameraDistance(options.battleDistance)
+
+--###################################################
+--# Restore logic on unload
+--###################################################
 
 local restorePointers = function()
     for i = 1, #originalValues do
         caveJmpPoint[i-1] = originalValues[i]
     end
+	
+	if (minDistance ~= 0 and minDistance ~= nil) then
+		minDistance.val = originalMinDistance
+	end
+	if (maxDistance ~= 0 and maxDistance ~= nil) then
+		maxDistance.val = originalMaxDistance
+	end
+	if (minBattleDistance ~= 0 and minBattleDistance ~= nil) then
+		minBattleDistance.val = originalMinBattleDistance
+	end
+	if (battleMaxDistance ~= 0 and battleMaxDistance ~= nil) then
+		battleMaxDistance.val = originalMaxBattleDistance
+	end
+	
+	if (zoomOnZoneInSetup ~= 0 and zoomOnZoneInSetup ~= nil) then
+		zoomOnZoneInSetup[0] = minDistance
+	end
 end
-
-account.login:register(function ()
-    coroutine.schedule(function()
-        readyToRender = true;
-    end, 5);
-end)
-account.logout:register(function()
-    readyToRender = false;
-end)
 
 --###################################################
 --# Commands
 --###################################################
 local setCameraSpeed = function(newSpeed)
-    cameraSpeedAdjustment_Ptr[0] = newSpeed
+    cameraSpeedAdjustmentPtr[0] = newSpeed
     options.cameraSpeed = newSpeed
 end
 
 local setDistance = function(newDistance)
     local num = tonumber(newDistance)
     if num ~= nil then
-        options.distance = num
+        setCameraDistance(newDistance)
         setCameraSpeed(num / 6.0)
         settings.save()
         add_text("Distance changed to " .. newDistance)
     end
 end
 
-local startRender = function()
-    readyToRender = true
-    add_text("Starting distance adjustment")
-end
-
-local stopRender = function()
-    readyToRender = true
-    add_text("Stopping distance adjustment")
+local setBattleDistance = function(newDistance)
+    local num = tonumber(newDistance)
+    if num ~= nil then
+        setBattleCameraDistance(newDistance)
+        settings.save()
+        add_text("Distance changed to " .. newDistance)
+    end
 end
 
 local displayHelp = function()
     add_text("</xicamera | /camera | /xicam | /cam>")
     add_text("Set Distance: <distance|d> <###>")
-    add_text("Start/Stop: <start|stop>")
+    add_text("Set Battle Distance: <battle|b> <###>")
 end
 
 local camera = command.new('camera')
@@ -243,9 +279,8 @@ local xicam = command.new('xicam')
 -- define chat functions 
 enumerable.all({camera, cam,  xicamera, xicam}, function(cmd)
     enumerable.all({'distance', 'd'}, function (fn) cmd:register(fn, setDistance, '<newDistance:integer>') end)
+    enumerable.all({'battle', 'b'}, function (fn) cmd:register(fn, setBattleDistance, '<newDistance:integer>') end)
     enumerable.all({'help', 'h'}, function (fn) cmd:register(fn, displayHelp) end)
-    cmd:register('start', startRender)
-    cmd:register('stop', stopRender)
 end)
 
 --TODO replace with unload event
@@ -253,7 +288,7 @@ gc_global = ffi_new('int*')
 ffi_gc(gc_global, restorePointers)
 
 --[[
-Copyright © 2021, Hokuten
+Copyright © 2022, Hokuten
 All rights reserved.
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
