@@ -11,15 +11,15 @@ namespace XICamera
 {
 	namespace Core
 	{
-		class Redirector
+		class Camera
 		{
 		public:
-			virtual ~Redirector(void);
+			virtual ~Camera(void);
 
-			bool setupRedirect(void);
-			bool removeRedirect(void);
+			bool initCamera(void);
+			bool removeCamera(void);
 
-			bool redirectActive(void) const { return m_redirectSet; };
+			bool cameraActive(void) const { return m_cameraSet; };
 
 			void setLogProvider(ILogProvider* logProvider);
 
@@ -29,17 +29,21 @@ namespace XICamera
 			bool setCameraDistance(const int& newDistance);
 			const int& cameraDistance(void) const { return m_cameraDistance; }
 
+			bool setBattleDistance(const int& newDistance);
+			const int& battleDistance(void) const { return m_battleDistance; }
+
 		public:
-			static Redirector& instance(void);
+			static Camera& instance(void);
 
 		protected:
-			static Redirector* s_instance;
+			static Camera* s_instance;
 
-			explicit Redirector(void);
+			explicit Camera(void);
 
 		private:
-			bool m_redirectSet;
+			bool m_cameraSet;
 			int m_cameraDistance;
+			int m_battleDistance;
 
 			ILogProvider::LogLevel m_logDebug;
 			ILogProvider* m_logger;

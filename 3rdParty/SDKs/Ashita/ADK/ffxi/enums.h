@@ -1,5 +1,5 @@
 /**
- * Ashita - Copyright (c) 2014 - 2017 atom0s [atom0s@live.com]
+ * Ashita - Copyright (c) 2014 - 2021 atom0s [atom0s@live.com]
  *
  * This work is licensed under the Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License.
  * To view a copy of this license, visit http://creativecommons.org/licenses/by-nc-nd/4.0/ or send a letter to
@@ -77,8 +77,13 @@ namespace Ashita {
                 Wardrobe2 = 10,
                 Wardrobe3 = 11,
                 Wardrobe4 = 12,
+                Wardrobe5 = 13,
+                Wardrobe6 = 14,
+                Wardrobe7 = 15,
+                Wardrobe8 = 16,
+                Recycle = 17,
 
-                ContainerMax = 13
+                ContainerMax = 18
             };
 
             /**

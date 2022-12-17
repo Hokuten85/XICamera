@@ -44,7 +44,7 @@ namespace XICamera
 	plugininfo_t *AshitaInterface::s_pluginInfo = nullptr;
 
 	AshitaInterface::AshitaInterface(void)
-	  : Core::Redirector(),
+	  : Core::Camera(),
 	
 	    m_showConfigWindow(false),
 	    m_pluginId(0),
@@ -55,11 +55,11 @@ namespace XICamera
 		/* FIXME: does this play anywhere nice with reloads?
 		 * FIXME: .. I hope it does
 		 */
-		Redirector::s_instance = this;
+		Camera::s_instance = this;
 
 		m_uiConfig.debugState = false;
-		m_uiConfig.setRedirect = false;
-		m_uiConfig.removeRedirect = false;
+		m_uiConfig.initCamera = false;
+		m_uiConfig.removeCamera = false;
 	}
 
 	plugininfo_t AshitaInterface::GetPluginInfo(void)
@@ -82,16 +82,17 @@ namespace XICamera
 			{
 				instance().setDebugLog(m_settings.debugLog);
 				instance().setCameraDistance(m_settings.cameraDistance);
+				instance().setBattleDistance(m_settings.battleDistance);
 			}
 			m_settings.save(m_config);
 		}
 
-		return instance().setupRedirect();
+		return instance().initCamera();
 	}
 
 	void AshitaInterface::Release(void)
 	{
-		instance().removeRedirect();
+		instance().removeCamera();
 	}
 
 	bool AshitaInterface::HandleCommand(const char *command, int32_t /*type*/)
@@ -117,11 +118,26 @@ namespace XICamera
 					}
 
 				}
+				else if (args[1] == "b" || args[1] == "battle")
+				{
+					int distance = std::stoi(args[2]);
+					if (instance().setBattleDistance(distance))
+					{
+						m_settings.battleDistance = distance;
+						m_settings.save(m_config);
+					}
+					else
+					{
+						chatPrintf("$cs(7)failed to set battle distance '$cs(9)%d$cs(7)'.$cr", distance);
+					}
+
+				}
 			}
 			else if (args.size() == 2 && (args[1] == "h" || args[1] == "help"))
 			{
 				chatPrintf("$cs(16)%s$cs(19) v.$cs(16)%.2f$cs(19) by $cs(14)%s$cr", s_pluginInfo->Name, s_pluginInfo->PluginVersion, s_pluginInfo->Author);
 				chatPrintf("   $cs(9)d$cs(16)istance # $cs(19)- Sets the camera distance$cr");
+				chatPrintf("   $cs(9)b$cs(16)attle # $cs(19)- Sets the battle distance$cr");
 			}
 			return true;
 		}
@@ -186,11 +202,13 @@ namespace XICamera
 	{
 		if (config->Load("XICamera", "XICamera"))
 		{
-			const int32_t cD = config->get_int32("XICamera", "cameraDistance",5);
+			const int32_t cD = config->get_int32("XICamera", "cameraDistance",6);
+			const int32_t bD = config->get_int32("XICamera", "battleDistance", 8);
 			const bool dbg = config->get_bool("XICamera", "debug_log", true);
 
 			debugLog = dbg;
 			cameraDistance = cD;
+			battleDistance = bD;
 
 			return true;
 		}
@@ -200,6 +218,7 @@ namespace XICamera
 	void AshitaInterface::Settings::save(IConfigurationManager *config)
 	{
 		config->set_value("XICamera", "cameraDistance", std::to_string(cameraDistance).c_str());
+		config->set_value("XICamera", "battleDistance", std::to_string(battleDistance).c_str());
 		config->Save("XICamera", "XICamera");
 	}
 

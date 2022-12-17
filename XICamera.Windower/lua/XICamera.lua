@@ -28,7 +28,7 @@
 
 _addon.name = 'XICamera'
 _addon.author = 'Hokuten'
-_addon.version = '0.5'
+_addon.version = '0.7.0'
 _addon.commands = {'camera','cam','xicamera','xicam'}
 
 config = require('config')
@@ -38,7 +38,8 @@ require('lists')
 -- package.cpath somehow doesn't appreciate backslashes
 local addon_path = windower.addon_path:gsub('\\', '/')
 defaults = T{
-    cameraDistance = 6
+    cameraDistance = 6,
+	battleDistance = 8.2,
 }
 
 settings = config.load(defaults)
@@ -50,6 +51,7 @@ require('_XICamera')
 windower.register_event('load', function()
     _XICamera.disable()
     _XICamera.set_camera_distance(settings.cameraDistance)
+	_XICamera.set_battle_distance(settings.battleDistance)
     _XICamera.enable()
 end)
 
@@ -64,6 +66,7 @@ windower.register_event('addon command', function(command, ...)
 	if command == 'help' or command == 'h' then
 		windower.add_to_chat(8, _addon.name .. ' v.' .. _addon.version)
 		windower.add_to_chat(8, '   d|distance # - sets the camera distance')
+		windower.add_to_chat(8, '   b|battle # - sets the camera distance')
 		windower.add_to_chat(8, '   status - Print status and diagnostic info')
 
 	elseif command == 'distance' or command == 'd' then
@@ -78,6 +81,19 @@ windower.register_event('addon command', function(command, ...)
 			config.save(settings)
 		else
 			windower.add_to_chat(8, 'failed to change distance "' .. args[1] .. '"')
+		end
+	elseif command == 'battle' or command == 'b' then
+		if not args[1] then
+			error('Invalid syntax: //camera battle <number>')
+			return
+		end
+
+		if _XICamera.set_battle_distance(tonumber(args[1])) > 0 then
+            windower.add_to_chat(8, 'set battle distance to "' .. tonumber(args[1]) .. '"')
+            settings.battleDistance = tonumber(args[1])
+			config.save(settings)
+		else
+			windower.add_to_chat(8, 'failed to change battle distance "' .. args[1] .. '"')
 		end
 	elseif command == 'status' or command == 's' then
 		local stats = _XICamera.diagnostics()

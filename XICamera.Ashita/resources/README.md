@@ -13,7 +13,8 @@ XICamera.xml:
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <settings>
-    <setting name="cameraDistance">5</setting>
+    <setting name="cameraDistance">6</setting>
+	<setting name="battleDistance">8.2</setting>
 </settings>
 ```
 ## In-Game commands
@@ -22,15 +23,11 @@ XICamera makes the in-game command `/camera` available to change the camera dist
 
 The following parameters are supported:
 
-- d/distance #     -- will change the camera distance
-- h/help                 -- print this text
+- d/distance # -- will change the camera distance
+- b/battle #   -- will change the camera distance
+- h/help       -- print this text
 
-These commands all support a short first letter version (d/h).
-Changes made with distance will be reflected in `XIPivot.xml`.
-
-## Limitations
-
-Normal camera behavior will very slightly depending on character movement. While the addon is on, the camera's ability to automatically trail behind you diminishes. You will stay in frame, but the camera doesn't swing behind you in the direction that you are running.
+These commands all support a short first letter version (d/b/h).
 
 ## Disclaimer
 

@@ -1,5 +1,5 @@
 /**
- * Ashita - Copyright (c) 2014 - 2017 atom0s [atom0s@live.com]
+ * Ashita - Copyright (c) 2014 - 2021 atom0s [atom0s@live.com]
  *
  * This work is licensed under the Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License.
  * To view a copy of this license, visit http://creativecommons.org/licenses/by-nc-nd/4.0/ or send a letter to
@@ -77,10 +77,10 @@ namespace Ashita {
             treasureitem_t  TreasurePool[0x000A];
             uint32_t        Unknown0002;                // Unknown (Treasure related. Set to 1 after zoning, 2 when something has dropped to the pool.)
             uint8_t         Unknown0003;                // Unknown (Treasure related.)
-            uint8_t         StorageMaxCapacity1[(uint32_t)Enums::Containers::ContainerMax];
+            uint8_t         StorageMaxCapacity1[(uint32_t)Enums::Containers::ContainerMax + 1];
             uint16_t        StorageMaxCapacity2[(uint32_t)Enums::Containers::ContainerMax];
             uint32_t        Unknown0004;
-            uint8_t         Unknown0005[0x0184];
+            uint8_t         Unknown0005[0x0188];
             equipment_t     Equipment[(uint32_t)Enums::EquipmentSlots::EquipmentSlotMax];
             uint8_t         Unknown0006[0x0240];
             uint8_t         Unknown0007[0x00BC];

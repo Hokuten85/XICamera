@@ -1,5 +1,5 @@
 /**
- * Ashita - Copyright (c) 2014 - 2017 atom0s [atom0s@live.com]
+ * Ashita - Copyright (c) 2014 - 2021 atom0s [atom0s@live.com]
  *
  * This work is licensed under the Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License.
  * To view a copy of this license, visit http://creativecommons.org/licenses/by-nc-nd/4.0/ or send a letter to
@@ -140,6 +140,7 @@ namespace Ashita
             uint16_t        ActionTimer1;
             uint16_t        ActionTimer2;
             render_t        Render;
+            uint32_t        Padding0000;
             float           Unknown0008;            // Fishing related.
             uint32_t        Unknown0009;            // Fade-in effect. (Valid values: 3 / 6)
             uint16_t        Unknown0010;            // Fade-in misc. (-1 gets reset to 0)

@@ -37,8 +37,7 @@ namespace XICamera
 			{ "disable"        , WindowerInterface::lua_disable },
  
 			{ "set_camera_distance"  , WindowerInterface::lua_setCameraDistance },
-
-			{ "diagnostics"    , WindowerInterface::lua_getDiagnostics },
+			{ "set_battle_distance"  , WindowerInterface::lua_setBattleDistance },
 
 			{ NULL, NULL }
 		};
@@ -49,13 +48,13 @@ namespace XICamera
 
 	int WindowerInterface::lua_enable(lua_State *L)
 	{
-		lua_pushboolean(L, instance().setupRedirect() ? TRUE : FALSE);
+		lua_pushboolean(L, instance().initCamera() ? TRUE : FALSE);
 		return 1;
 	}
 
 	int WindowerInterface::lua_disable(lua_State *L)
 	{
-		lua_pushboolean(L, instance().removeRedirect() ? TRUE : FALSE);
+		lua_pushboolean(L, instance().removeCamera() ? TRUE : FALSE);
 		return 1;
 	}
 
@@ -73,17 +72,17 @@ namespace XICamera
 		return 1;
 	}
 
-	int WindowerInterface::lua_getDiagnostics(lua_State *L)
+	int WindowerInterface::lua_setBattleDistance(lua_State* L)
 	{
-		/* push a table to hold the diagnostics as a whole */
-		lua_createtable(L, 1, 2);
+		if (lua_gettop(L) != 1 || !lua_isnumber(L, 1))
+		{
+			lua_pushstring(L, "a valid distance argument is required");
+			lua_error(L);
+		}
 
-		lua_pushboolean(L, instance().redirectActive() ? TRUE : FALSE);
-		lua_setfield(L, -2, "enabled");
+		instance().setBattleDistance(lua_tonumber(L, 1));
 
-		lua_pushnumber(L, instance().cameraDistance());
-		lua_setfield(L, -2, "cameraDistance");
-
+		lua_pushnumber(L, instance().battleDistance());
 		return 1;
 	}
 }

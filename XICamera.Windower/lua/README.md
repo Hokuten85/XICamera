@@ -6,7 +6,7 @@ XICamera is an addon that allows to change the camera distance.
 
 - 1) Copy the XICamera folder into your Windower addons folder.
 - 2) (Optional) Edit `data/settings.xml`:
-   - change the default camera distance. Distance will be defaulted to 5 if no setting is specified.
+   - change the default camera distance. Camera and Battle distance will be defaulted to 6 and 8.2 if no setting is specified.
 
 settings.xml:
 
@@ -14,7 +14,8 @@ settings.xml:
 <?xml version="1.1" ?>
 <settings>
     <global>
-	<cameraDistance>5</cameraDistance>
+	<cameraDistance>6</cameraDistance>
+	<battleDistance>8.2</battleDistance>
     </global>
 </settings>
 ```
@@ -24,16 +25,12 @@ settings.xml:
 XICamera makes the in-game command `//camera` or `//cam` available to adjust camera distance on the fly.
 The following parameters are supported:
 
-- d/distance #     -- will change the camera distance
-- s/status               -- dumps XICamera's global status
-- h/help                 -- print this text
+- d/distance # -- will change the camera distance
+- b/battle #   -- will change the battle camera distance
+- h/help       -- print this text
 
-These commands all support a short first letter version (d/s/h).
+These commands all support a short first letter version (d/b/h).
 Changes made with distance will be reflected in `settings.xml`.
-
-## Limitations
-
-Normal camera behavior will very slightly depending on character movement. While the addon is on, the camera's ability to automatically trail behind you diminishes. You will stay in frame, but the camera doesn't swing behind you in the direction that you are running.
 
 ## Disclaimer
 

@@ -30,11 +30,11 @@
 
 #include <string>
 #include "ADK/Ashita.h"
-#include "Redirector.h"
+#include "Camera.h"
 
 namespace XICamera
 {
-	class AshitaInterface : public IPlugin, public Core::ILogProvider, private Core::Redirector
+	class AshitaInterface : public IPlugin, public Core::ILogProvider, private Core::Camera
 	{
 
 	public:
@@ -71,6 +71,7 @@ namespace XICamera
 
 			bool debugLog;
 			int cameraDistance;
+			int battleDistance;
 		};
 
 		Settings               m_settings;
@@ -81,8 +82,8 @@ namespace XICamera
 		struct
 		{
 			bool        debugState;
-			bool		removeRedirect;
-			bool        setRedirect;
+			bool		removeCamera;
+			bool        initCamera;
 		} m_uiConfig;
 
 		/* Ashita runtime data */

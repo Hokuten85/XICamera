@@ -21,12 +21,12 @@
   <ItemGroup>
     <ClCompile Include="functions.cpp" />
     <ClCompile Include="LogProvider.cpp" />
-    <ClCompile Include="Redirector.cpp" />
+    <ClCompile Include="Camera.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="functions.h" />
     <ClInclude Include="LogProvider.h" />
-    <ClInclude Include="Redirector.h" />
+    <ClInclude Include="Camera.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
