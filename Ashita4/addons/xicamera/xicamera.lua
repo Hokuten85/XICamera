@@ -1,6 +1,6 @@
 addon.author   = 'Hokuten';
 addon.name     = 'xicamera';
-addon.version  = '0.7.0';
+addon.version  = '0.7.1';
 addon.desc     = 'Modifies the camera distance from the player.';
 
 local common = require('common');
@@ -48,6 +48,7 @@ local maxBattleDistancePtr
 local originalMaxBattleDistance
 
 local zoomSetupSig
+local walkAnimationSig
 local originalMinDistancePtr
 local newMinDistanceConstant
 
@@ -154,7 +155,7 @@ ashita.events.register('load', 'camera_load', function()
 	originalMaxBattleDistance = ashita.memory.read_float(maxBattleDistancePtr)
 	ashita.memory.unprotect(maxBattleDistancePtr, 4)
 	
-	-- GET LOCATION OF ZOOM LENSE SETUP
+	-- GET LOCATION OF ZOOM LENS SETUP
 	zoomSetupSig = ashita.memory.find('FFXiMain.dll', 0, 'D9442404D80D6C2B????D80D', 0, 0);
 	if (zoomSetupSig == 0) then error('Failed to locate zoomSetupSig!'); end
 	
@@ -164,6 +165,13 @@ ashita.events.register('load', 'camera_load', function()
 	
 	-- Write new memloc to zoom setup function to fix zone-in bug
 	ashita.memory.write_uint32(zoomSetupSig + 0x0C, newMinDistanceConstant);
+	
+	-- GET LOCATION OF WALK ANIMATION
+	walkAnimationSig = ashita.memory.find('FFXiMain.dll', 0, 'D80DC02B????D913', 0, 0);
+	if (walkAnimationSig == 0) then error('Failed to locate walkAnimationSig!'); end
+	
+	-- Write new memloc to walk animation
+	ashita.memory.write_uint32(walkAnimationSig + 0x02, newMinDistanceConstant);
 	
 	-- SET CAMERA DISTANCE BASED ON configs
 	setCameraDistance(configs.distance)
@@ -229,6 +237,10 @@ local restorePointers = function()
 	
 	if (zoomSetupSig ~= 0 and zoomSetupSig ~= nil) then
 		ashita.memory.write_uint32(zoomSetupSig + 0x0C, originalMinDistancePtr)
+		ashita.memory.dealloc(newMinDistanceConstant, 4)
+	end
+	if (walkAnimationSig ~= 0 and walkAnimationSig ~= nil) then
+		ashita.memory.write_uint32(walkAnimationSig + 0x06, originalMinDistancePtr)
 		ashita.memory.dealloc(newMinDistanceConstant, 4)
 	end
 end

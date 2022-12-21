@@ -17,6 +17,7 @@ namespace XICamera
 		DWORD g_MinBattleAddress; // Camera Max distance in Battle.
 		DWORD g_MaxBattleAddress; // Camera Max distance in Battle.
 		DWORD g_ZoomOnZoneInSetupAddress;
+		DWORD g_WalkAnimationAddress;
 
 		float g_OriginalMinDistance;
 		float g_OriginalMaxDistance;
@@ -135,6 +136,13 @@ namespace XICamera
 				g_NewMinDistance = g_OriginalMinDistance;
 				*(DWORD*)g_ZoomOnZoneInSetupAddress = (DWORD)&g_NewMinDistance;
 
+				g_WalkAnimationAddress = XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD8\x0D\xC0\x2B\xFF\xFF\xD9\x13", "xxxx??xx") + 0x02;
+				if (g_WalkAnimationAddress == 0)
+				{
+					return 0;
+				}
+				*(DWORD*)g_WalkAnimationAddress = (DWORD)&g_NewMinDistance;
+
 				setCameraDistance(m_cameraDistance);
 				setBattleDistance(m_battleDistance);
 
@@ -196,6 +204,10 @@ namespace XICamera
 			if (g_ZoomOnZoneInSetupAddress != 0)
 			{
 				*(DWORD*)g_ZoomOnZoneInSetupAddress = g_MinCameraAddress;
+			}
+			if (g_WalkAnimationAddress != 0)
+			{
+				*(DWORD*)g_WalkAnimationAddress = g_MinCameraAddress;
 			}
 
 			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_cameraSet = %s", m_cameraSet ? "true" : "false");

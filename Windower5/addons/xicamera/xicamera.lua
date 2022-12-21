@@ -90,6 +90,7 @@ local originalMinBattleDistance
 local maxBattleDistance
 local originalMaxBattleDistance
 local zoomOnZoneInSetup
+local walkAnimation
 
 local setCameraDistance = function(newDistance)
 	options.distance = newDistance
@@ -206,6 +207,12 @@ newMinDistanceConstant[0] = originalMinDistance
 zoomOnZoneInSetup[0] = newMinDistanceConstant
 
 --###################################################
+--# Walk Animation
+--###################################################
+walkAnimation = ffi_cast('float**', scanner.scan('D80D&C02B????D913'))
+walkAnimation[0] = newMinDistanceConstant
+
+--###################################################
 --# SET CAMERA DISTANCE BASED ON options
 --###################################################
 setCameraDistance(options.distance)
@@ -235,6 +242,9 @@ local restorePointers = function()
 	
 	if (zoomOnZoneInSetup ~= 0 and zoomOnZoneInSetup ~= nil) then
 		zoomOnZoneInSetup[0] = minDistance
+	end
+    if (walkAnimation ~= 0 and walkAnimation ~= nil) then
+		walkAnimation[0] = minDistance
 	end
 end
 

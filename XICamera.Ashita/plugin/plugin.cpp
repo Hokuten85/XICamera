@@ -42,7 +42,7 @@ extern "C" {
 		strcpy_s(info->Name, sizeof(info->Name), "XICamera");
 
 		info->InterfaceVersion = ASHITA_INTERFACE_VERSION;
-		info->PluginVersion = 0.02f;
+		info->PluginVersion = 0.7f;
 		info->Priority = 0;
 	}
 

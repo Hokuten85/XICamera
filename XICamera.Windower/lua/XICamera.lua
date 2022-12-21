@@ -28,7 +28,7 @@
 
 _addon.name = 'XICamera'
 _addon.author = 'Hokuten'
-_addon.version = '0.7.0'
+_addon.version = '0.7.1'
 _addon.commands = {'camera','cam','xicamera','xicam'}
 
 config = require('config')
@@ -95,14 +95,5 @@ windower.register_event('addon command', function(command, ...)
 		else
 			windower.add_to_chat(8, 'failed to change battle distance "' .. args[1] .. '"')
 		end
-	elseif command == 'status' or command == 's' then
-		local stats = _XICamera.diagnostics()
-		windower.add_to_chat(127,'- diagnostics')
-		if stats['enabled'] then
-			windower.add_to_chat(127, '-  enabled  : true')
-		else
-			windower.add_to_chat(127'-  enabled  : false')
-		end
-		windower.add_to_chat(127, '-  cameraDistance: "' .. stats['cameraDistance'] .. '"')
 	end
 end)
