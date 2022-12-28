@@ -219,4 +219,8 @@ ashita.register_event('unload', function()
 		ashita.memory.write_uint32(zoomSetupSig + 0x0C, originalMinDistancePtr)
 		ashita.memory.dealloc(newMinDistanceConstant, 4)
 	end
+	if (walkAnimationSig ~= 0 and walkAnimationSig ~= nil) then
+		ashita.memory.write_uint32(walkAnimationSig + 0x02, originalMinDistancePtr)
+		ashita.memory.dealloc(newMinDistanceConstant, 4)
+	end
 end);
