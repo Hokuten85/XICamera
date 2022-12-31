@@ -1,6 +1,6 @@
 addon.author   = 'Hokuten';
 addon.name     = 'xicamera';
-addon.version  = '0.7.1';
+addon.version  = '0.7.2';
 addon.desc     = 'Modifies the camera distance from the player.';
 
 local common = require('common');
@@ -49,6 +49,7 @@ local originalMaxBattleDistance
 
 local zoomSetupSig
 local walkAnimationSig
+local npcWalkAnimationSig
 local originalMinDistancePtr
 local newMinDistanceConstant
 
@@ -173,6 +174,13 @@ ashita.events.register('load', 'camera_load', function()
 	-- Write new memloc to walk animation
 	ashita.memory.write_uint32(walkAnimationSig + 0x02, newMinDistanceConstant);
 	
+	-- GET LOCATION OF NPC WALK ANIMATION
+	npcWalkAnimationSig = ashita.memory.find('FFXiMain.dll', 0, 'D9442410D80DC02B????D91B', 0, 0);
+	if (npcWalkAnimationSig == 0) then error('Failed to locate npcWalkAnimationSig!'); end
+	
+	-- Write new memloc to npc walk animation
+	ashita.memory.write_uint32(npcWalkAnimationSig + 0x06, newMinDistanceConstant);
+	
 	-- SET CAMERA DISTANCE BASED ON configs
 	setCameraDistance(configs.distance)
 	
@@ -241,6 +249,10 @@ local restorePointers = function()
 	end
 	if (walkAnimationSig ~= 0 and walkAnimationSig ~= nil) then
 		ashita.memory.write_uint32(walkAnimationSig + 0x02, originalMinDistancePtr)
+		ashita.memory.dealloc(newMinDistanceConstant, 4)
+	end
+	if (npcWalkAnimationSig ~= 0 and npcWalkAnimationSig ~= nil) then
+		ashita.memory.write_uint32(npcWalkAnimationSig + 0x06, originalMinDistancePtr)
 		ashita.memory.dealloc(newMinDistanceConstant, 4)
 	end
 end

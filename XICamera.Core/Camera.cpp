@@ -18,6 +18,7 @@ namespace XICamera
 		DWORD g_MaxBattleAddress; // Camera Max distance in Battle.
 		DWORD g_ZoomOnZoneInSetupAddress;
 		DWORD g_WalkAnimationAddress;
+		DWORD g_NPCWalkAnimationAddress;
 
 		float g_OriginalMinDistance;
 		float g_OriginalMaxDistance;
@@ -131,6 +132,7 @@ namespace XICamera
 				g_ZoomOnZoneInSetupAddress = XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD9\x44\x24\x04\xD8\x0D\x6C\x2B\xFF\xFF\xD8\x0D", "xxxxxxxx??xx") + 0x0C;
 				if (g_ZoomOnZoneInSetupAddress == 0)
 				{
+					removeCamera();
 					return 0;
 				}
 				g_NewMinDistance = g_OriginalMinDistance;
@@ -139,9 +141,19 @@ namespace XICamera
 				g_WalkAnimationAddress = XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD8\x0D\xC0\x2B\xFF\xFF\xD9\x13", "xxxx??xx") + 0x02;
 				if (g_WalkAnimationAddress == 0)
 				{
+					removeCamera();
 					return 0;
 				}
 				*(DWORD*)g_WalkAnimationAddress = (DWORD)&g_NewMinDistance;
+
+				
+				g_NPCWalkAnimationAddress = XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD9\x44\x24\x10\xD8\x0D\xC0\x2B\xFF\xFF\xD9\x1B", "xxxxxxxx??xx") + 0x06;
+				if (g_NPCWalkAnimationAddress == 0)
+				{
+					removeCamera();
+					return 0;
+				}
+				*(DWORD*)g_NPCWalkAnimationAddress = (DWORD)&g_NewMinDistance;
 
 				setCameraDistance(m_cameraDistance);
 				setBattleDistance(m_battleDistance);
@@ -208,6 +220,10 @@ namespace XICamera
 			if (g_WalkAnimationAddress != 0)
 			{
 				*(DWORD*)g_WalkAnimationAddress = g_MinCameraAddress;
+			}
+			if (g_NPCWalkAnimationAddress != 0)
+			{
+				*(DWORD*)g_NPCWalkAnimationAddress = g_MinCameraAddress;
 			}
 
 			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_cameraSet = %s", m_cameraSet ? "true" : "false");

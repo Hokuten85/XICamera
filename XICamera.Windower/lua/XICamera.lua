@@ -28,7 +28,7 @@
 
 _addon.name = 'XICamera'
 _addon.author = 'Hokuten'
-_addon.version = '0.7.1'
+_addon.version = '0.7.2'
 _addon.commands = {'camera','cam','xicamera','xicam'}
 
 config = require('config')

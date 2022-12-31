@@ -91,6 +91,7 @@ local maxBattleDistance
 local originalMaxBattleDistance
 local zoomOnZoneInSetup
 local walkAnimation
+local npcWalkAnimation
 
 local setCameraDistance = function(newDistance)
 	options.distance = newDistance
@@ -141,8 +142,8 @@ for i = 1, #codeCaveValues do
 end
 
 -- Create memory location to store Camera Speed
-local cameraSpeedAdjustmentPtr = ffi_new('float*', ffi_new('float[?]', 1))
-cameraSpeedAdjustmentPtr[0] = options.cameraSpeed
+local cameraSpeedAdjustmentPtr = ffi_new('float*', ffi_new('float[?]', 0))
+cameraSpeedAdjustmentPtr[0] = tonumber(options.cameraSpeed)
 
 -- Push in pointer to Camera Speed into the Code Cave
 local camSpeedInCave = ffi_cast('float**',codeCave + 0x02)
@@ -196,25 +197,31 @@ try(VirtualProtect(ffi_cast('void*', maxDistance), 4, 0x04, ffi_new('DWORD[?]', 
 try(VirtualProtect(ffi_cast('void*', minBattleDistance), 4, 0x04, ffi_new('DWORD[?]', 0)), {ErrorMsg = "Failed to remove minBattleDistance Write Protection."})
 try(VirtualProtect(ffi_cast('void*', maxBattleDistance), 4, 0x04, ffi_new('DWORD[?]', 0)), {ErrorMsg = "Failed to remove maxBattleDistance Write Protection."})
 
---###################################################
---# Zoom on zone-in setup?
---###################################################
-zoomOnZoneInSetup = ffi_cast('float**', scanner.scan('D9442404D80D6C2B????D80D&'))
-
-local newMinDistanceConstant = ffi_new('float*', ffi_new('float[?]', 1))
+-- Setup new distance memory location
+local newMinDistanceConstant = ffi_new('float*', ffi_new('float[?]', 0))
 newMinDistanceConstant[0] = originalMinDistance
 
+-- -- --###################################################
+-- -- --# Zoom on zone-in setup?
+-- -- --###################################################
+zoomOnZoneInSetup = ffi_cast('float**', scanner.scan('D9442404D80D6C2B????D80D&'))
 zoomOnZoneInSetup[0] = newMinDistanceConstant
 
---###################################################
---# Walk Animation
---###################################################
+-- --###################################################
+-- --# Walk Animation
+-- --###################################################
 walkAnimation = ffi_cast('float**', scanner.scan('D80D&C02B????D913'))
 walkAnimation[0] = newMinDistanceConstant
 
---###################################################
---# SET CAMERA DISTANCE BASED ON options
---###################################################
+-- --###################################################
+-- --# NPC Walk Animation
+-- --###################################################
+npcWalkAnimation = ffi_cast('float**', scanner.scan('D9442410D80D&C02B????D91B'))
+npcWalkAnimation[0] = newMinDistanceConstant
+
+-- --###################################################
+-- --# SET CAMERA DISTANCE BASED ON options
+-- --###################################################
 setCameraDistance(options.distance)
 setBattleCameraDistance(options.battleDistance)
 
@@ -241,10 +248,13 @@ local restorePointers = function()
 	end
 	
 	if (zoomOnZoneInSetup ~= 0 and zoomOnZoneInSetup ~= nil) then
-		zoomOnZoneInSetup[0] = minDistance
+		zoomOnZoneInSetup[0] = ffi_cast("float*", minDistance)
 	end
     if (walkAnimation ~= 0 and walkAnimation ~= nil) then
-		walkAnimation[0] = minDistance
+		walkAnimation[0] = ffi_cast("float*", minDistance)
+	end
+    if (npcWalkAnimation ~= 0 and npcWalkAnimation ~= nil) then
+		npcWalkAnimation[0] = ffi_cast("float*", minDistance)
 	end
 end
 
