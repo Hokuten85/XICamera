@@ -219,7 +219,7 @@ ashita.register_event('unload', function()
 	if (minBattleDistancePtr ~= 0 and minBattleDistancePtr ~= nil) then
 		ashita.memory.write_float(minBattleDistancePtr, originalMinBattleDistance)
 	end
-	if (battleMaxDistancePtr ~= 0 and battleMaxDistancePtr ~= nil) then
+	if (maxBattleDistancePtr ~= 0 and maxBattleDistancePtr ~= nil) then
 		ashita.memory.write_float(maxBattleDistancePtr, originalMaxBattleDistance)
 	end
 	
