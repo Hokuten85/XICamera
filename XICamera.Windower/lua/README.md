@@ -27,9 +27,10 @@ The following parameters are supported:
 
 - d/distance # -- will change the camera distance
 - b/battle #   -- will change the battle camera distance
-- h/help       -- print this text
+- h/help       -- print help text
+- s/status       -- print status
 
-These commands all support a short first letter version (d/b/h).
+These commands all support a short first letter version (d/b/h/s).
 Changes made with distance will be reflected in `settings.xml`.
 
 ## Disclaimer
