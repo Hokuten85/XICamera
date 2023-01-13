@@ -80,6 +80,18 @@ namespace XICamera
 			 */
 			static int lua_setBattleDistance(lua_State* L);
 
+			/* collects some of the internal data of the Camera
+			 *
+			 * arguments: none
+			 * returns: a table of the following make-up
+			 *  {
+			 *		"enabled": <boolean>,
+			 *      "camera distance": <int>
+			 *      "battle distance": <int>
+			 *  }
+			 */
+			static int lua_getStatus(lua_State* L);
+
 		protected:
 			WindowerInterface(void) : Camera() {};
 	};

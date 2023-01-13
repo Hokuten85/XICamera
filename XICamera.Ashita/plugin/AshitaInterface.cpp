@@ -130,14 +130,16 @@ namespace XICamera
 					{
 						chatPrintf("$cs(7)failed to set battle distance '$cs(9)%d$cs(7)'.$cr", distance);
 					}
-
 				}
 			}
-			else if (args.size() == 2 && (args[1] == "h" || args[1] == "help"))
+			else if (args.size() == 2)
 			{
-				chatPrintf("$cs(16)%s$cs(19) v.$cs(16)%.2f$cs(19) by $cs(14)%s$cr", s_pluginInfo->Name, s_pluginInfo->PluginVersion, s_pluginInfo->Author);
-				chatPrintf("   $cs(9)d$cs(16)istance # $cs(19)- Sets the camera distance$cr");
-				chatPrintf("   $cs(9)b$cs(16)attle # $cs(19)- Sets the battle distance$cr");
+				if (args[1] == "h" || args[1] == "help")
+				{
+					chatPrintf("$cs(16)%s$cs(19) v.$cs(16)%.2f$cs(19) by $cs(14)%s$cr", s_pluginInfo->Name, s_pluginInfo->PluginVersion, s_pluginInfo->Author);
+					chatPrintf("   $cs(9)d$cs(16)istance # $cs(19)- Sets the camera distance$cr");
+					chatPrintf("   $cs(9)b$cs(16)attle # $cs(19)- Sets the battle distance$cr");
+				}
 			}
 			return true;
 		}
@@ -195,6 +197,7 @@ namespace XICamera
 	AshitaInterface::Settings::Settings()
 	{
 		cameraDistance = 5;
+		battleDistance = 8;
 		debugLog = false;
 	}
 

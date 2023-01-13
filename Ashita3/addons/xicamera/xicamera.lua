@@ -1,6 +1,6 @@
 _addon.author   = 'Hokuten';
 _addon.name     = 'xicamera';
-_addon.version  = '0.7.2';
+_addon.version  = '0.7.3';
 
 require 'common'
 
@@ -186,6 +186,11 @@ ashita.register_event('command', function(command, ntype)
         elseif table.hasvalue({'help', 'h'}, command_args[2]) then
             print("Set Distance: </camera|/cam|> <distance|d> <###>")
 			print("Set Battle Distance: </camera|/cam> <battle|b> <###>")
+			print("Status: </camera|/cam> <status|s>")
+		elseif table.hasvalue({'status', 's'}, command_args[2]) then
+			print("- status")
+			print("-  cameraDistance: " .. configs.distance)
+			print("-  battleDistance: " .. configs.battledistance)
         end
     end
 

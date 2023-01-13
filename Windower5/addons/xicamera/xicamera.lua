@@ -289,6 +289,14 @@ local displayHelp = function()
     add_text("</xicamera | /camera | /xicam | /cam>")
     add_text("Set Distance: <distance|d> <###>")
     add_text("Set Battle Distance: <battle|b> <###>")
+    add_text("Set Battle Distance: <battle|b> <###>")
+    add_text("Displays status: <status|s>")
+end
+
+local displayStatus = function()
+    add_text("- status")
+	add_text("-  cameraDistance: " .. maxDistance.val)
+	add_text("-  battleDistance: " .. maxBattleDistance.val)
 end
 
 local camera = command.new('camera')
@@ -301,6 +309,7 @@ enumerable.all({camera, cam,  xicamera, xicam}, function(cmd)
     enumerable.all({'distance', 'd'}, function (fn) cmd:register(fn, setDistance, '<newDistance:integer>') end)
     enumerable.all({'battle', 'b'}, function (fn) cmd:register(fn, setBattleDistance, '<newDistance:integer>') end)
     enumerable.all({'help', 'h'}, function (fn) cmd:register(fn, displayHelp) end)
+    enumerable.all({'status', 's'}, function (fn) cmd:register(fn, displayStatus) end)
 end)
 
 --TODO replace with unload event

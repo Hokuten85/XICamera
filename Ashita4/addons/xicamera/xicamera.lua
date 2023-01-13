@@ -1,6 +1,6 @@
 addon.author   = 'Hokuten';
 addon.name     = 'xicamera';
-addon.version  = '0.7.2';
+addon.version  = '0.7.3';
 addon.desc     = 'Modifies the camera distance from the player.';
 
 local common = require('common');
@@ -209,7 +209,12 @@ ashita.events.register('command', 'camera_command', function(e)
             end	
         elseif table.contains({'help', 'h'}, command_args[2]) then
             print("Set Distance: </camera|/cam> <distance|d> <###>")
-            print("Start/Stop: </camera|/cam> <start|stop>")
+			print("Set Distance: </camera|/cam> <battle|b> <###>")
+            print("Status: </camera|/cam> <status|s>")
+		elseif table.contains({'status', 's'}, command_args[2]) then
+			print("- status")
+			print("-  cameraDistance: " .. configs.distance)
+			print("-  battleDistance: " .. configs.battleDistance)
         end
     end
 

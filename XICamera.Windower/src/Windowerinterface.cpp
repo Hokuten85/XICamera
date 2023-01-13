@@ -39,6 +39,8 @@ namespace XICamera
 			{ "set_camera_distance"  , WindowerInterface::lua_setCameraDistance },
 			{ "set_battle_distance"  , WindowerInterface::lua_setBattleDistance },
 
+			{ "status"    , WindowerInterface::lua_getStatus },
+
 			{ NULL, NULL }
 		};
 
@@ -83,6 +85,23 @@ namespace XICamera
 		instance().setBattleDistance(lua_tonumber(L, 1));
 
 		lua_pushnumber(L, instance().battleDistance());
+		return 1;
+	}
+
+	int WindowerInterface::lua_getStatus(lua_State* L)
+	{
+		/* push a table to hold the diagnostics as a whole */
+		lua_createtable(L, 1, 2);
+
+		lua_pushboolean(L, instance().cameraActive() ? TRUE : FALSE);
+		lua_setfield(L, -2, "enabled");
+
+		lua_pushnumber(L, instance().cameraDistance());
+		lua_setfield(L, -2, "cameraDistance");
+
+		lua_pushnumber(L, instance().battleDistance());
+		lua_setfield(L, -2, "battleDistance");
+
 		return 1;
 	}
 }
