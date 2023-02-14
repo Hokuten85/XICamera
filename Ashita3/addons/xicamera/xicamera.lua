@@ -1,6 +1,6 @@
 _addon.author   = 'Hokuten';
 _addon.name     = 'xicamera';
-_addon.version  = '0.7.3';
+_addon.version  = '0.7.4';
 
 require 'common'
 
@@ -102,15 +102,15 @@ ashita.register_event('load', function()
     ashita.memory.write_uint8(caveJmpCavePoint + 0x05, 0x90)
 	
 	--GET MIN CAMERA DISTANCE
-	local minDistanceSig = ashita.memory.findpattern('FFXiMain.dll', 0, 'D9442410D81DC02B', 0, 0);
+	local minDistanceSig = ashita.memory.findpattern('FFXiMain.dll', 0, '84????????D9442410D81D', 0, 0);
 	if (minDistanceSig == 0) then error('Failed to locate minDistanceSig!'); end
 	
-	minDistancePtr = ashita.memory.read_uint32(minDistanceSig + 0x06);
+	minDistancePtr = ashita.memory.read_uint32(minDistanceSig + 0x0B);
 	originalMinDistance = ashita.memory.read_float(minDistancePtr)
 	ashita.memory.unprotect(minDistancePtr, 4)
 	
 	--GET MAX CAMERA DISTANCE
-	local maxDistanceSig = ashita.memory.findpattern('FFXiMain.dll', 0, 'D9442410D8257032', 0, 0);
+	local maxDistanceSig = ashita.memory.findpattern('FFXiMain.dll', 0, 'D9442410D825????????51', 0, 0);
 	if (maxDistanceSig == 0) then error('Failed to locate maxDistanceSig!'); end
 	
 	maxDistancePtr = ashita.memory.read_uint32(maxDistanceSig + 0x06);
@@ -118,7 +118,7 @@ ashita.register_event('load', function()
 	ashita.memory.unprotect(maxDistancePtr, 4)
 	
 	-- GET MIN BATTLE DISTANCE
-	local minBattleDistanceSig = ashita.memory.findpattern('FFXiMain.dll', 0, 'D8442424D9053032', 0, 0);
+	local minBattleDistanceSig = ashita.memory.findpattern('FFXiMain.dll', 0, 'D8442424D905????', 0, 0);
 	if (minBattleDistanceSig == 0) then error('Failed to locate minBattleDistanceSig!'); end
 	
 	minBattleDistancePtr = ashita.memory.read_uint32(minBattleDistanceSig + 0x06);
@@ -126,7 +126,7 @@ ashita.register_event('load', function()
 	ashita.memory.unprotect(minBattleDistancePtr, 4)
 	
 	-- GET MAX BATTLE DISTANCE
-	local battleMaxDistanceSig = ashita.memory.findpattern('FFXiMain.dll', 0, 'D95C2450D8052C32', 0, 0);
+	local battleMaxDistanceSig = ashita.memory.findpattern('FFXiMain.dll', 0, 'D95C2450D805????', 0, 0);
 	if (battleMaxDistanceSig == 0) then error('Failed to locate battleMaxDistanceSig!'); end
 	
 	maxBattleDistancePtr = ashita.memory.read_uint32(battleMaxDistanceSig + 0x06);
@@ -134,10 +134,10 @@ ashita.register_event('load', function()
 	ashita.memory.unprotect(maxBattleDistancePtr, 4)
 	
 	-- GET LOCATION OF ZOOM LENSE SETUP
-	zoomSetupSig = ashita.memory.findpattern('FFXiMain.dll', 0, 'D9442404D80D6C2B????D80D', 0, 0);
+	zoomSetupSig = ashita.memory.findpattern('FFXiMain.dll', 0, '85??????D9442404D80D????????D80D', 0, 0);
 	if (zoomSetupSig == 0) then error('Failed to locate zoomSetupSig!'); end
 	
-	originalMinDistancePtr = ashita.memory.read_uint32(zoomSetupSig + 0x0C);
+	originalMinDistancePtr = ashita.memory.read_uint32(zoomSetupSig + 0x10);
 	newMinDistanceConstant = ashita.memory.alloc(4);
     ashita.memory.write_float(newMinDistanceConstant, originalMinDistance);
 	
@@ -145,14 +145,14 @@ ashita.register_event('load', function()
 	ashita.memory.write_uint32(zoomSetupSig + 0x0C, newMinDistanceConstant);
 	
 	-- GET LOCATION OF WALK ANIMATION
-	walkAnimationSig = ashita.memory.findpattern('FFXiMain.dll', 0, 'D80DC02B????D913', 0, 0);
+	walkAnimationSig = ashita.memory.findpattern('FFXiMain.dll', 0, 'D80D????????D913', 0, 0);
 	if (walkAnimationSig == 0) then error('Failed to locate walkAnimationSig!'); end
 	
 	-- Write new memloc to walk animation
 	ashita.memory.write_uint32(walkAnimationSig + 0x02, newMinDistanceConstant);
 	
 	-- GET LOCATION OF NPC WALK ANIMATION
-	npcWalkAnimationSig = ashita.memory.findpattern('FFXiMain.dll', 0, 'D9442410D80DC02B????D91B', 0, 0);
+	npcWalkAnimationSig = ashita.memory.findpattern('FFXiMain.dll', 0, 'D9442410D80D????????D91B', 0, 0);
 	if (npcWalkAnimationSig == 0) then error('Failed to locate npcWalkAnimationSig!'); end
 	
 	-- Write new memloc to npc walk animation
@@ -229,7 +229,7 @@ ashita.register_event('unload', function()
 	end
 	
 	if (zoomSetupSig ~= 0 and zoomSetupSig ~= nil) then
-		ashita.memory.write_uint32(zoomSetupSig + 0x0C, originalMinDistancePtr)
+		ashita.memory.write_uint32(zoomSetupSig + 0x10, originalMinDistancePtr)
 		ashita.memory.dealloc(newMinDistanceConstant, 4)
 	end
 	if (walkAnimationSig ~= 0 and walkAnimationSig ~= nil) then

@@ -167,16 +167,16 @@ caveJmpPoint[5] = 0x90
 --###################################################
 --# Camera Distance
 --###################################################
-memory.minDistance = struct({signature = 'D9442410D81D*C02B'}, {
+memory.minDistance = struct({signature = '84????????D9442410D81D*'}, {
     val = {0x0, float}
 })
-memory.maxDistance = struct({signature = 'D9442410D825*7032'}, {
+memory.maxDistance = struct({signature = 'D9442410D825*????????51'}, {
     val = {0x0, float}
 })
-memory.minBattleDistance = struct({signature = 'D8442424D905*3032'}, {
+memory.minBattleDistance = struct({signature = 'D8442424D905*????'}, {
     val = {0x0, float}
 })
-memory.maxBattleDistance = struct({signature = 'D95C2450D805*2C32'}, {
+memory.maxBattleDistance = struct({signature = 'D95C2450D805*????'}, {
     val = {0x0, float}
 })
 
@@ -204,19 +204,19 @@ newMinDistanceConstant[0] = originalMinDistance
 -- -- --###################################################
 -- -- --# Zoom on zone-in setup?
 -- -- --###################################################
-zoomOnZoneInSetup = ffi_cast('float**', scanner.scan('D9442404D80D6C2B????D80D&'))
+zoomOnZoneInSetup = ffi_cast('float**', scanner.scan('85??????D9442404D80D????????D80D&'))
 zoomOnZoneInSetup[0] = newMinDistanceConstant
 
 -- --###################################################
 -- --# Walk Animation
 -- --###################################################
-walkAnimation = ffi_cast('float**', scanner.scan('D80D&C02B????D913'))
+walkAnimation = ffi_cast('float**', scanner.scan('D80D&????????D913'))
 walkAnimation[0] = newMinDistanceConstant
 
 -- --###################################################
 -- --# NPC Walk Animation
 -- --###################################################
-npcWalkAnimation = ffi_cast('float**', scanner.scan('D9442410D80D&C02B????D91B'))
+npcWalkAnimation = ffi_cast('float**', scanner.scan('D9442410D80D&????????D91B'))
 npcWalkAnimation[0] = newMinDistanceConstant
 
 -- --###################################################
