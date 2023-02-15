@@ -93,7 +93,7 @@ namespace XICamera
 
 				m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_cameraSet = %s", m_cameraSet ? "true" : "false");
 
-				g_MinCameraAddress = *(DWORD*)(XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\x84\xFF\xFF\xFF\xFF\xD9\x44\x24\x10\xD8\x1D", "x????xxxxxx") + 0x0B);
+				g_MinCameraAddress = *(DWORD*)(XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD8\xC9\xD9\xC0\xD8\xC1\xD9\xC2\xD8\x0D\xFF\xFF\xFF\xFF\xD9\xC3\xDC\xC0\xD8\xEB", "xxxxxxxxxx????xxxxxx") + 0x0A);
 				if (g_MinCameraAddress == 0)
 				{
 					removeCamera();
@@ -102,7 +102,7 @@ namespace XICamera
 				}
 				g_OriginalMinDistance = *(FLOAT*)(g_MinCameraAddress);
 
-				g_MaxCameraAddress = *(DWORD*)(XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD9\x44\x24\x10\xD8\x25\xFF\xFF\xFF\xFF\x51", "xxxxxx????x") + 0x06);
+				g_MaxCameraAddress = *(DWORD*)(XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD9\x44\x24\x10\xD8\x25\xFF\xFF\xFF\xFF\x51\xD8\x0D", "xxxxxx????xxx") + 0x06);
 				if (g_MaxCameraAddress == 0)
 				{
 					removeCamera();
@@ -111,7 +111,7 @@ namespace XICamera
 				}
 				g_OriginalMaxDistance = *(FLOAT*)(g_MaxCameraAddress);
 
-				g_MinBattleAddress = *(DWORD*)(XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD8\x44\x24\x24\xD9\x05\xFF\xFF", "xxxxxx??") + 0x06);
+				g_MinBattleAddress = *(DWORD*)(XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\x51\x52\xD8\x44\x24\x24\xD9\x05\xFF\xFF\xFF\xFF\xD8\xC1", "xxxxxxxx????xx") + 0x08);
 				if (g_MinBattleAddress == 0)
 				{
 					removeCamera();
@@ -120,7 +120,7 @@ namespace XICamera
 				}
 				g_OriginalMinBattleDistance = *(FLOAT*)(g_MinBattleAddress);
 
-				g_MaxBattleAddress = *(DWORD*)(XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD9\x5C\x24\x50\xD8\x05\xFF\xFF", "xxxxxx??") + 0x06);
+				g_MaxBattleAddress = *(DWORD*)(XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD8\xC1\xD8\xCA\xD9\x5C\x24\x50\xD8\x05\xFF\xFF\xFF\xFF\xD8\xC9", "xxxxxxxxxx????xx") + 0x0A);
 				if (g_MaxBattleAddress == 0)
 				{
 					removeCamera();
@@ -129,7 +129,7 @@ namespace XICamera
 				}
 				g_OriginalMaxBattleDistance = *(FLOAT*)(g_MaxBattleAddress);
 
-				g_ZoomOnZoneInSetupAddress = XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\x85\xFF\xFF\xFF\xD9\x44\x24\x04\xD8\x0D\xFF\xFF\xFF\xFF\xD8\x0D", "x???xxxxxx????xx") + 0x10;
+				g_ZoomOnZoneInSetupAddress = XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\x85\xC0\x74\x1A\xD9\x44\x24\x04\xD8\x0D\xFF\xFF\xFF\xFF\xD8\x0D\xFF\xFF\xFF\xFF\xD8\x7C", "xxxxxxxxxx????xx????xx") + 0x10;
 				if (g_ZoomOnZoneInSetupAddress == 0)
 				{
 					removeCamera();
@@ -138,7 +138,7 @@ namespace XICamera
 				g_NewMinDistance = g_OriginalMinDistance;
 				*(DWORD*)g_ZoomOnZoneInSetupAddress = (DWORD)&g_NewMinDistance;
 
-				g_WalkAnimationAddress = XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD8\x0D\xFF\xFF\xFF\xFF\xD9\x13", "xx????xx") + 0x02;
+				g_WalkAnimationAddress = XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\x0F\x85\xFF\xFF\xFF\xFF\xD8\x0D\xFF\xFF\xFF\xFF\xD9\x13\xD8\x1D", "xx????xx????xxxx") + 0x08;
 				if (g_WalkAnimationAddress == 0)
 				{
 					removeCamera();
@@ -147,7 +147,7 @@ namespace XICamera
 				*(DWORD*)g_WalkAnimationAddress = (DWORD)&g_NewMinDistance;
 
 				
-				g_NPCWalkAnimationAddress = XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD9\x44\x24\x10\xD8\x0D\xFF\xFF\xFF\xFF\xD9\x1B", "xxxxxx????xx") + 0x06;
+				g_NPCWalkAnimationAddress = XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\x75\x14\xD9\x44\x24\x10\xD8\x0D\xFF\xFF\xFF\xFF\xD9\x1B\x8B\x8E", "xxxxxxxx????xxxx") + 0x08;
 				if (g_NPCWalkAnimationAddress == 0)
 				{
 					removeCamera();

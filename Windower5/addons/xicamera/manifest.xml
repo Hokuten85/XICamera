@@ -1,6 +1,6 @@
 <package>
   <name>xicamera</name>
-  <version>0.7.4</version>
+  <version>0.7.5</version>
   <type>addon</type>
   <dependencies>
     <dependency>settings</dependency>

@@ -167,16 +167,16 @@ caveJmpPoint[5] = 0x90
 --###################################################
 --# Camera Distance
 --###################################################
-memory.minDistance = struct({signature = '84????????D9442410D81D*'}, {
+memory.minDistance = struct({signature = 'D8C9D9C0D8C1D9C2D80D*????????D9C3DCC0D8EB'}, {
     val = {0x0, float}
 })
-memory.maxDistance = struct({signature = 'D9442410D825*????????51'}, {
+memory.maxDistance = struct({signature = 'D9442410D825*????????51D80D'}, {
     val = {0x0, float}
 })
-memory.minBattleDistance = struct({signature = 'D8442424D905*????'}, {
+memory.minBattleDistance = struct({signature = '5152D8442424D905*????????D8C1'}, {
     val = {0x0, float}
 })
-memory.maxBattleDistance = struct({signature = 'D95C2450D805*????'}, {
+memory.maxBattleDistance = struct({signature = 'D8C1D8CAD95C2450D805*????????D8C9'}, {
     val = {0x0, float}
 })
 
@@ -204,19 +204,19 @@ newMinDistanceConstant[0] = originalMinDistance
 -- -- --###################################################
 -- -- --# Zoom on zone-in setup?
 -- -- --###################################################
-zoomOnZoneInSetup = ffi_cast('float**', scanner.scan('85??????D9442404D80D????????D80D&'))
+zoomOnZoneInSetup = ffi_cast('float**', scanner.scan('85C0741AD9442404D80D????????D80D&????????D87C'))
 zoomOnZoneInSetup[0] = newMinDistanceConstant
 
 -- --###################################################
 -- --# Walk Animation
 -- --###################################################
-walkAnimation = ffi_cast('float**', scanner.scan('D80D&????????D913'))
+walkAnimation = ffi_cast('float**', scanner.scan('0F85????????D80D&????????D913D81D'))
 walkAnimation[0] = newMinDistanceConstant
 
 -- --###################################################
 -- --# NPC Walk Animation
 -- --###################################################
-npcWalkAnimation = ffi_cast('float**', scanner.scan('D9442410D80D&????????D91B'))
+npcWalkAnimation = ffi_cast('float**', scanner.scan('7514D9442410D80D&????????D91B8B8E'))
 npcWalkAnimation[0] = newMinDistanceConstant
 
 -- --###################################################
