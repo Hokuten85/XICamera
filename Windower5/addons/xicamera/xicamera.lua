@@ -92,6 +92,7 @@ local originalMaxBattleDistance
 local zoomOnZoneInSetup
 local walkAnimation
 local npcWalkAnimation
+local battleSound
 
 local setCameraDistance = function(newDistance)
 	options.distance = newDistance
@@ -201,27 +202,33 @@ try(VirtualProtect(ffi_cast('void*', maxBattleDistance), 4, 0x04, ffi_new('DWORD
 local newMinDistanceConstant = ffi_new('float*', ffi_new('float[?]', 0))
 newMinDistanceConstant[0] = originalMinDistance
 
--- -- --###################################################
--- -- --# Zoom on zone-in setup?
--- -- --###################################################
+--###################################################
+--# Zoom on zone-in setup?
+--###################################################
 zoomOnZoneInSetup = ffi_cast('float**', scanner.scan('85C0741AD9442404D80D????????D80D&????????D87C'))
 zoomOnZoneInSetup[0] = newMinDistanceConstant
 
--- --###################################################
--- --# Walk Animation
--- --###################################################
+--###################################################
+--# Walk Animation
+--###################################################
 walkAnimation = ffi_cast('float**', scanner.scan('0F85????????D80D&????????D913D81D'))
 walkAnimation[0] = newMinDistanceConstant
 
--- --###################################################
--- --# NPC Walk Animation
--- --###################################################
+--###################################################
+--# NPC Walk Animation
+--###################################################
 npcWalkAnimation = ffi_cast('float**', scanner.scan('7514D9442410D80D&????????D91B8B8E'))
 npcWalkAnimation[0] = newMinDistanceConstant
 
--- --###################################################
--- --# SET CAMERA DISTANCE BASED ON options
--- --###################################################
+--###################################################
+--# BATTLE SOUND CALCULATION
+--###################################################
+battleSound = ffi_cast('float**', scanner.scan('D95C2414741B487410D9442410D80D&'))
+battleSound[0] = newMinDistanceConstant
+
+--###################################################
+--# SET CAMERA DISTANCE BASED ON options
+--###################################################
 setCameraDistance(options.distance)
 setBattleCameraDistance(options.battleDistance)
 
@@ -255,6 +262,9 @@ local restorePointers = function()
 	end
     if (npcWalkAnimation ~= 0 and npcWalkAnimation ~= nil) then
 		npcWalkAnimation[0] = ffi_cast("float*", minDistance)
+	end
+	if (battleSound ~= 0 and battleSound ~= nil) then
+		battleSound[0] = ffi_cast("float*", minDistance)
 	end
 end
 

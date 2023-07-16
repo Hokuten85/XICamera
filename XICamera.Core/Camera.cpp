@@ -19,6 +19,7 @@ namespace XICamera
 		DWORD g_ZoomOnZoneInSetupAddress;
 		DWORD g_WalkAnimationAddress;
 		DWORD g_NPCWalkAnimationAddress;
+		DWORD g_BattleSoundAddress;
 
 		float g_OriginalMinDistance;
 		float g_OriginalMaxDistance;
@@ -155,6 +156,15 @@ namespace XICamera
 				}
 				*(DWORD*)g_NPCWalkAnimationAddress = (DWORD)&g_NewMinDistance;
 
+				g_BattleSoundAddress = XICamera::functions::FindPattern("FFXiMain.dll",      (BYTE*)"\xD9\x5C\x24\x14\x74\x1B\x48\x74\x10\xD9\x44\x24\x10\xD8\x0D", "xxxxxxxxxxxxxxx") + 0x0F;
+				if (g_BattleSoundAddress == 0)
+				{
+					removeCamera();
+					return 0;
+				}
+				*(DWORD*)g_BattleSoundAddress = (DWORD)&g_NewMinDistance;
+
+
 				setCameraDistance(m_cameraDistance);
 				setBattleDistance(m_battleDistance);
 
@@ -224,6 +234,10 @@ namespace XICamera
 			if (g_NPCWalkAnimationAddress != 0)
 			{
 				*(DWORD*)g_NPCWalkAnimationAddress = g_MinCameraAddress;
+			}
+			if (g_BattleSoundAddress != 0)
+			{
+				*(DWORD*)g_BattleSoundAddress = g_MinCameraAddress;
 			}
 
 			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_cameraSet = %s", m_cameraSet ? "true" : "false");

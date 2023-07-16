@@ -1,6 +1,6 @@
 addon.author   = 'Hokuten';
 addon.name     = 'xicamera';
-addon.version  = '0.7.5';
+addon.version  = '0.7.6';
 addon.desc     = 'Modifies the camera distance from the player.';
 
 local common = require('common');
@@ -50,6 +50,7 @@ local originalMaxBattleDistance
 local zoomSetupSig
 local walkAnimationSig
 local npcWalkAnimationSig
+local battleSoundSig
 local originalMinDistancePtr
 local newMinDistanceConstant
 
@@ -181,6 +182,13 @@ ashita.events.register('load', 'camera_load', function()
 	-- Write new memloc to npc walk animation
 	ashita.memory.write_uint32(npcWalkAnimationSig + 0x08, newMinDistanceConstant);
 	
+	-- GET LOCATION OF BATTLE SOUND CALCULATION
+	battleSoundSig = ashita.memory.find('FFXiMain.dll', 0, 'D95C2414741B487410D9442410D80D', 0, 0);
+	if (battleSoundSig == 0) then error('Failed to locate battleSoundSig!'); end
+	
+	-- Write new memloc to npc walk animation
+	ashita.memory.write_uint32(battleSoundSig + 0x0F, newMinDistanceConstant);
+	
 	-- SET CAMERA DISTANCE BASED ON configs
 	setCameraDistance(configs.distance)
 	
@@ -258,6 +266,10 @@ local restorePointers = function()
 	end
 	if (npcWalkAnimationSig ~= 0 and npcWalkAnimationSig ~= nil) then
 		ashita.memory.write_uint32(npcWalkAnimationSig + 0x08, originalMinDistancePtr)
+		ashita.memory.dealloc(newMinDistanceConstant, 4)
+	end
+	if (battleSoundSig ~= 0 and battleSoundSig ~= nil) then
+		ashita.memory.write_uint32(battleSoundSig + 0x0F, originalMinDistancePtr)
 		ashita.memory.dealloc(newMinDistanceConstant, 4)
 	end
 end
