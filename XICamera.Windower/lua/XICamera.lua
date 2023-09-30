@@ -45,7 +45,7 @@ defaults = T{
 }
 
 settings = config.load(defaults)
-config.save(settings, 'all')
+config.save(settings)
 	
 package.cpath = package.cpath .. ';' .. addon_path .. '/libs/?.dll'
 require('_XICamera')

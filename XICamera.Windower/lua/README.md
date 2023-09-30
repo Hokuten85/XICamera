@@ -16,6 +16,8 @@ settings.xml:
     <global>
 	<cameraDistance>6</cameraDistance>
 	<battleDistance>8.2</battleDistance>
+	<horizontalPanSpeed>3</cameraDistance>
+	<verticalPanSpeed>10.7</battleDistance>
     </global>
 </settings>
 ```
@@ -27,6 +29,8 @@ The following parameters are supported:
 
 - d/distance # -- will change the camera distance
 - b/battle #   -- will change the battle camera distance
+- hs/hspeed #   -- will change the horizontal panning speed
+- vs/vspeed #   -- will change the vertical panning speed
 - h/help       -- print help text
 - s/status       -- print status
 
