@@ -10,8 +10,6 @@ namespace XICamera
 	{
 		Camera* Camera::s_instance = nullptr;
 
-		DWORD g_SpeedReturnAddress; // Camera Speed return address to allow the code cave to return properly.
-		DWORD g_SpeedAddress; // Camera Speed address to identify where to start injecting.
 		DWORD g_MinCameraAddress; // Camera Min distance address.
 		DWORD g_MaxCameraAddress; // Camera Max distance address.
 		DWORD g_MinBattleAddress; // Camera Max distance in Battle.
@@ -20,14 +18,16 @@ namespace XICamera
 		DWORD g_WalkAnimationAddress;
 		DWORD g_NPCWalkAnimationAddress;
 		DWORD g_BattleSoundAddress;
+		DWORD g_horizontalPanAddress; // horizontal pan address.
+		DWORD g_verticalPanAddress; // vertical pan address.
 
 		float g_OriginalMinDistance;
 		float g_OriginalMaxDistance;
 		float g_OriginalMinBattleDistance;
 		float g_OriginalMaxBattleDistance;
 		float g_NewMinDistance;
-
-		float g_cameraMoveSpeed;
+		float g_OriginalHorizontalPanSpeed;
+		float g_OriginalVerticalPanSpeed;
 
 		Camera& Camera::instance(void)
 		{
@@ -58,42 +58,10 @@ namespace XICamera
 			m_logger = newLogProvider;
 		}
 
-		/**
-		 * @brief Camera Speed fix codecave.
-		 */
-		__declspec(naked) void CameraSpeed(void)
-		{
-			__asm push g_cameraMoveSpeed;
-			__asm fadd dword ptr [esp];
-			__asm add esp, 4;
-
-			__asm fmul dword ptr [esp + 0x24];
-			__asm mov edx, [esi];
-
-			__asm jmp g_SpeedReturnAddress;
-		}
-
-
 		bool Camera::initCamera(void)
 		{
 			if (m_cameraSet == false)
 			{
-				g_SpeedAddress = (DWORD)XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD8\x4C\x24\x24\x8B\x16\x8B\xCE\xD8\x0D", "xxxxxxxxxx");
-				if (g_SpeedAddress == 0)
-				{
-					removeCamera();
-					m_logger->logMessage(ILogProvider::LogLevel::Info, "could not find camera speed position");
-					return 0;
-				}
-				auto caveSpeedDest = ((int)CameraSpeed - ((int)g_SpeedAddress)) - 5;
-				g_SpeedReturnAddress = g_SpeedAddress + 0x06;
-
-				*(BYTE*)(g_SpeedAddress + 0x00) = 0xE9; // jmp
-				*(UINT*)(g_SpeedAddress + 0x01) = caveSpeedDest;
-				*(BYTE*)(g_SpeedAddress + 0x05) = 0x90; //nop
-
-				m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_cameraSet = %s", m_cameraSet ? "true" : "false");
-
 				g_MinCameraAddress = *(DWORD*)(XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD8\xC9\xD9\xC0\xD8\xC1\xD9\xC2\xD8\x0D\xFF\xFF\xFF\xFF\xD9\xC3\xDC\xC0\xD8\xEB", "xxxxxxxxxx????xxxxxx") + 0x0A);
 				if (g_MinCameraAddress == 0)
 				{
@@ -164,9 +132,29 @@ namespace XICamera
 				}
 				*(DWORD*)g_BattleSoundAddress = (DWORD)&g_NewMinDistance;
 
+				g_horizontalPanAddress = *(DWORD*)(XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD8\x4C\x24\x20\x8B\x06\x8B\xCE\xD8\x0D", "xxxxxxxxxx") + 0x0A);
+				if (g_horizontalPanAddress == 0)
+				{
+					removeCamera();
+					m_logger->logMessage(ILogProvider::LogLevel::Info, "could not horizontal pan position");
+					return 0;
+				}
+				g_OriginalHorizontalPanSpeed = *(FLOAT*)(g_horizontalPanAddress);
+
+				g_verticalPanAddress = *(DWORD*)(XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD8\x4C\x24\x24\x8B\x16\x8B\xCE\xD8\x0D", "xxxxxxxxxx") + 0x0A);
+				if (g_verticalPanAddress == 0)
+				{
+					removeCamera();
+					m_logger->logMessage(ILogProvider::LogLevel::Info, "could not vertical pan position");
+					return 0;
+				}
+				g_OriginalVerticalPanSpeed = *(FLOAT*)(g_verticalPanAddress);
+
 
 				setCameraDistance(m_cameraDistance);
 				setBattleDistance(m_battleDistance);
+				setHorizontalPanSpeed(m_horizontalPanSpeed);
+				setVerticalPanSpeed(m_verticalPanSpeed);
 
 				m_cameraSet = true;
 
@@ -180,16 +168,6 @@ namespace XICamera
 		bool Camera::removeCamera(void)
 		{
 			m_cameraSet = false;
-
-			if (g_SpeedAddress != 0)
-			{
-				*(BYTE*)(g_SpeedAddress + 0x00) = 0xD8;
-				*(BYTE*)(g_SpeedAddress + 0x01) = 0x4C;
-				*(BYTE*)(g_SpeedAddress + 0x02) = 0x24;
-				*(BYTE*)(g_SpeedAddress + 0x03) = 0x24;
-				*(BYTE*)(g_SpeedAddress + 0x04) = 0x8B;
-				*(BYTE*)(g_SpeedAddress + 0x05) = 0x16;
-			}
 
 			if (g_MinCameraAddress != 0)
 			{
@@ -223,6 +201,22 @@ namespace XICamera
 				VirtualProtect((void*)g_MaxBattleAddress, 4, dwProtect, new DWORD);
 			}
 
+			if (g_horizontalPanAddress != 0)
+			{
+				DWORD dwProtect;
+				VirtualProtect((void*)g_horizontalPanAddress, 4, PAGE_READWRITE, &dwProtect);
+				*(FLOAT*)(g_horizontalPanAddress) = g_OriginalHorizontalPanSpeed;
+				VirtualProtect((void*)g_horizontalPanAddress, 4, dwProtect, new DWORD);
+			}
+
+			if (g_verticalPanAddress != 0)
+			{
+				DWORD dwProtect;
+				VirtualProtect((void*)g_verticalPanAddress, 4, PAGE_READWRITE, &dwProtect);
+				*(FLOAT*)(g_verticalPanAddress) = g_OriginalVerticalPanSpeed;
+				VirtualProtect((void*)g_verticalPanAddress, 4, dwProtect, new DWORD);
+			}
+
 			if (g_ZoomOnZoneInSetupAddress != 0)
 			{
 				*(DWORD*)g_ZoomOnZoneInSetupAddress = g_MinCameraAddress;
@@ -253,7 +247,6 @@ namespace XICamera
 		bool Camera::setCameraDistance(const int &newDistance)
 		{
 			m_cameraDistance = newDistance;
-			g_cameraMoveSpeed = newDistance / 10.0f;
 
 			if (g_MinCameraAddress != 0)
 			{
@@ -297,6 +290,40 @@ namespace XICamera
 			}
 
 			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_battleDistance = '%d'", m_battleDistance);
+
+			return true;
+		}
+
+		bool Camera::setHorizontalPanSpeed(const int& newSpeed)
+		{
+			m_horizontalPanSpeed = newSpeed;
+
+			if (g_horizontalPanAddress != 0)
+			{
+				DWORD dwProtect;
+				VirtualProtect((void*)g_horizontalPanAddress, 4, PAGE_READWRITE, &dwProtect);
+				*(FLOAT*)(g_horizontalPanAddress) = m_horizontalPanSpeed / 100.0;
+				VirtualProtect((void*)g_horizontalPanAddress, 4, dwProtect, new DWORD);
+			}
+
+			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_horizontalPanSpeed = '%d'", m_horizontalPanSpeed);
+
+			return true;
+		}
+
+		bool Camera::setVerticalPanSpeed(const int& newSpeed)
+		{
+			m_verticalPanSpeed = newSpeed;
+
+			if (g_verticalPanAddress != 0)
+			{
+				DWORD dwProtect;
+				VirtualProtect((void*)g_verticalPanAddress, 4, PAGE_READWRITE, &dwProtect);
+				*(FLOAT*)(g_verticalPanAddress) = m_verticalPanSpeed / 100.0;
+				VirtualProtect((void*)g_verticalPanAddress, 4, dwProtect, new DWORD);
+			}
+
+			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_verticalPanSpeed = '%d'", m_verticalPanSpeed);
 
 			return true;
 		}

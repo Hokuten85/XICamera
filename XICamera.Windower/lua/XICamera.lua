@@ -28,7 +28,7 @@
 
 _addon.name = 'XICamera'
 _addon.author = 'Hokuten'
-_addon.version = '0.7.6'
+_addon.version = '0.7.7'
 _addon.commands = {'camera','cam','xicamera','xicam'}
 
 config = require('config')
@@ -40,6 +40,8 @@ local addon_path = windower.addon_path:gsub('\\', '/')
 defaults = T{
     cameraDistance = 6,
 	battleDistance = 8.2,
+	horizontalPanSpeed = 3.0,
+	verticalPanSpeed = 10.7,
 }
 
 settings = config.load(defaults)
@@ -52,6 +54,8 @@ windower.register_event('load', function()
     _XICamera.disable()
     _XICamera.set_camera_distance(settings.cameraDistance)
 	_XICamera.set_battle_distance(settings.battleDistance)
+	_XICamera.set_horizontal_pan_speed(settings.horizontalPanSpeed)
+	_XICamera.set_vertical_pan_speed(settings.verticalPanSpeed)
     _XICamera.enable()
 end)
 
@@ -67,6 +71,8 @@ windower.register_event('addon command', function(command, ...)
 		windower.add_to_chat(8, _addon.name .. ' v.' .. _addon.version)
 		windower.add_to_chat(8, '   d|distance # - sets the camera distance')
 		windower.add_to_chat(8, '   b|battle # - sets the camera distance')
+		windower.add_to_chat(8, '   hs|hspeed # - sets the horizontal pan speed')
+		windower.add_to_chat(8, '   vs|vspeed # - sets the vertical pan')
 		windower.add_to_chat(8, '   s|status - Print status and diagnostic info')
 
 	elseif command == 'distance' or command == 'd' then
@@ -95,10 +101,38 @@ windower.register_event('addon command', function(command, ...)
 		else
 			windower.add_to_chat(8, 'failed to change battle distance "' .. args[1] .. '"')
 		end
+	elseif command == 'hspeed' or command == 'hs' then
+		if not args[1] then
+			error('Invalid syntax: //camera hspeed <number>')
+			return
+		end
+
+		if _XICamera.set_horizontal_pan_speed(tonumber(args[1])) > 0 then
+            windower.add_to_chat(8, 'set horizontal pan speed to "' .. tonumber(args[1]) .. '"')
+            settings.horizontalPanSpeed = tonumber(args[1])
+			config.save(settings)
+		else
+			windower.add_to_chat(8, 'failed to horizontal pan speed "' .. args[1] .. '"')
+		end
+	elseif command == 'vspeed' or command == 'vs' then
+		if not args[1] then
+			error('Invalid syntax: //camera vspeed <number>')
+			return
+		end
+
+		if _XICamera.set_vertical_pan_speed(tonumber(args[1])) > 0 then
+            windower.add_to_chat(8, 'set vertical pan speed to "' .. tonumber(args[1]) .. '"')
+            settings.verticalPanSpeed = tonumber(args[1])
+			config.save(settings)
+		else
+			windower.add_to_chat(8, 'failed to vertical pan speed "' .. args[1] .. '"')
+		end
 	elseif command == 'status' or command == 's' then
 		local stats = _XICamera.status()
 		windower.add_to_chat(127,'- status')
 		windower.add_to_chat(127, '-  cameraDistance: ' .. stats['cameraDistance'])
 		windower.add_to_chat(127, '-  battleDistance: ' .. stats['battleDistance'])
+		windower.add_to_chat(127, '-  horizontalPanSpeed: ' .. stats['horizontalPanSpeed'])
+		windower.add_to_chat(127, '-  verticalPanSpeed: ' .. stats['verticalPanSpeed'])
 	end
 end)

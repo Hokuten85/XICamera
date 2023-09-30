@@ -80,6 +80,20 @@ namespace XICamera
 			 */
 			static int lua_setBattleDistance(lua_State* L);
 
+			/* internally calls Camera::setHorizontalPanSpeed
+			 *
+			 * arguments: [1] - int: newSpeed
+			 * returns: a boolean representing the operation result
+			 */
+			static int lua_setHorizontalPanSpeed(lua_State* L);
+
+			/* internally calls Camera::setVerticalPanSpeed
+			 *
+			 * arguments: [1] - int: newSpeed
+			 * returns: a boolean representing the operation result
+			 */
+			static int lua_setVerticalPanSpeed(lua_State* L);
+
 			/* collects some of the internal data of the Camera
 			 *
 			 * arguments: none

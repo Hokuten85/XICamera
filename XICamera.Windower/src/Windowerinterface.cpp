@@ -38,6 +38,8 @@ namespace XICamera
  
 			{ "set_camera_distance"  , WindowerInterface::lua_setCameraDistance },
 			{ "set_battle_distance"  , WindowerInterface::lua_setBattleDistance },
+			{ "set_horizontal_pan_speed"  , WindowerInterface::lua_setHorizontalPanSpeed },
+			{ "set_vertical_pan_speed"  , WindowerInterface::lua_setVerticalPanSpeed },
 
 			{ "status"    , WindowerInterface::lua_getStatus },
 
@@ -88,6 +90,34 @@ namespace XICamera
 		return 1;
 	}
 
+	int WindowerInterface::lua_setHorizontalPanSpeed(lua_State* L)
+	{
+		if (lua_gettop(L) != 1 || !lua_isnumber(L, 1))
+		{
+			lua_pushstring(L, "a valid distance argument is required");
+			lua_error(L);
+		}
+
+		instance().setHorizontalPanSpeed(lua_tonumber(L, 1));
+
+		lua_pushnumber(L, instance().horizontalPanSpeed());
+		return 1;
+	}
+
+	int WindowerInterface::lua_setVerticalPanSpeed(lua_State* L)
+	{
+		if (lua_gettop(L) != 1 || !lua_isnumber(L, 1))
+		{
+			lua_pushstring(L, "a valid distance argument is required");
+			lua_error(L);
+		}
+
+		instance().setVerticalPanSpeed(lua_tonumber(L, 1));
+
+		lua_pushnumber(L, instance().verticalPanSpeed());
+		return 1;
+	}
+
 	int WindowerInterface::lua_getStatus(lua_State* L)
 	{
 		/* push a table to hold the diagnostics as a whole */
@@ -101,6 +131,12 @@ namespace XICamera
 
 		lua_pushnumber(L, instance().battleDistance());
 		lua_setfield(L, -2, "battleDistance");
+
+		lua_pushnumber(L, instance().horizontalPanSpeed());
+		lua_setfield(L, -2, "horizontalPanSpeed");
+
+		lua_pushnumber(L, instance().verticalPanSpeed());
+		lua_setfield(L, -2, "verticalPanSpeed");
 
 		return 1;
 	}

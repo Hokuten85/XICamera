@@ -1,6 +1,6 @@
 addon.author   = 'Hokuten';
 addon.name     = 'xicamera';
-addon.version  = '0.7.6';
+addon.version  = '0.7.7';
 addon.desc     = 'Modifies the camera distance from the player.';
 
 local common = require('common');
@@ -12,38 +12,22 @@ local settings = require('settings');
 local default_settings = T{
     distance    = 6,
     cameraSpeed = 1.0,
-	battleDistance = 8.2
+	battleDistance = 8.2,
+	horizontalPanSpeed = 3.0,
+	verticalPanSpeed = 10.7,
 };
 local configs = settings.load(default_settings);
 
 ----------------------------------------------------------------------------------------------------
 -- Variables
 ----------------------------------------------------------------------------------------------------
-local originalValues = {
-    0xD8, 0x4C, 0x24, 0x24, -- fmul dword ptr [esp+24]
-    0x8B, 0x16, -- mov edx,[esi]
-}
-
-local codeCaveValues = {
-    0xD8, 0x05, 0x00, 0x00, 0x00, 0x00, -- fadd dword ptr [00000000]
-    0xD8, 0x4C, 0x24, 0x24, -- fmul dword ptr [esp+24]
-    0x8B, 0x16, -- mov edx,[esi]
-    0xE9, 0x00, 0x00, 0x00, 0x00 -- jmp to return point
-}
-
-local speedAdjustment
-local codeCave
-local injectionPoint
-
 local minDistancePtr
 local originalMinDistance
-
 local maxDistancePtr
 local originalMaxDistance
 
 local minBattleDistancePtr
 local originalMinBattleDistance
-
 local maxBattleDistancePtr
 local originalMaxBattleDistance
 
@@ -53,6 +37,11 @@ local npcWalkAnimationSig
 local battleSoundSig
 local originalMinDistancePtr
 local newMinDistanceConstant
+
+local horizontalPanSpeedPtr
+local oringinalHorizontalPanSpeed
+local verticalPanSpeedPtr
+local oringinalVerticalPanSpeed
 
 
 ----------------------------------------------------------------------------------------------------
@@ -78,11 +67,6 @@ end
 --]]
 settings.register('settings', 'settings_update', update_settings);
 
-local setCameraSpeed = function(newSpeed)
-	configs.cameraSpeed = newSpeed
-    ashita.memory.write_float(speedAdjustment, newSpeed);
-end
-
 local setCameraDistance = function(newDistance)
 	configs.distance = newDistance
 	ashita.memory.write_float(minDistancePtr, newDistance - (originalMaxDistance - originalMinDistance));
@@ -95,36 +79,21 @@ local setBattleCameraDistance = function(newDistance)
 	ashita.memory.write_float(maxBattleDistancePtr, newDistance);
 end
 
+local setHorizontalPanSpeed = function(newSpeed)
+	configs.horizontalPanSpeed = newSpeed 
+	ashita.memory.write_float(horizontalPanSpeedPtr, newSpeed / 100.0);
+end
+
+local setVerticalPanSpeed = function(newSpeed)
+	configs.verticalPanSpeed = newSpeed 
+	ashita.memory.write_float(verticalPanSpeedPtr, newSpeed / 100.0);
+end
+
 ----------------------------------------------------------------------------------------------------
 -- func: load
 -- desc: Event called when the addon is being loaded.
 ----------------------------------------------------------------------------------------------------
 ashita.events.register('load', 'camera_load', function()
-    -- Create location to store vertical camera speed adjustment
-    speedAdjustment = ashita.memory.alloc(4);
-    ashita.memory.write_float(speedAdjustment, configs.cameraSpeed);
-    
-    -- Create code cave to adjust vertical camera move speed
-    codeCave = ashita.memory.alloc(17);
-    
-    ashita.memory.unprotect(codeCave, 17)
-    ashita.memory.write_array(codeCave, codeCaveValues)
-    
-    -- Push in pointer to Camera Speed into the Code Cave
-    ashita.memory.write_uint32(codeCave + 0x02, speedAdjustment)
-    
-    -- Get the point where we are injecting code to jump to code cave
-    injectionPoint = ashita.memory.find('FFXiMain.dll', 0, 'D84C24248B168BCED80D', 0, 0);
-    if (injectionPoint == 0) then error('Failed to locate critical signature #1!'); end
-    
-    -- Push in pointer to the return point into the Code Cave
-    ashita.memory.write_int32(codeCave + 0x0D, (injectionPoint + 0x06) - (codeCave + 0x0C) - 0x05)
-
-    -- Set up the Jump to the Code Cave    
-    ashita.memory.write_uint8(injectionPoint, 0xE9)
-    ashita.memory.write_int32(injectionPoint + 0x01, (codeCave - injectionPoint - 0x05))
-    ashita.memory.write_uint8(injectionPoint + 0x05, 0x90)
-	
 	--GET MIN CAMERA DISTANCE
 	local minDistanceSig = ashita.memory.find('FFXiMain.dll', 0, 'D8C9D9C0D8C1D9C2D80D????????D9C3DCC0D8EB', 0, 0);
 	if (minDistanceSig == 0) then error('Failed to locate minDistanceSig!'); end
@@ -189,11 +158,31 @@ ashita.events.register('load', 'camera_load', function()
 	-- Write new memloc to npc walk animation
 	ashita.memory.write_uint32(battleSoundSig + 0x0F, newMinDistanceConstant);
 	
+	--Horizontal Cam Pan Speed
+	local hPanSpeedSig = ashita.memory.find('FFXiMain.dll', 0, 'D84C24208B068BCED80D', 0, 0);
+	if (hPanSpeedSig == 0) then error('Failed to locate hPanSpeedSig!'); end
+	
+	horizontalPanSpeedPtr = ashita.memory.read_uint32(hPanSpeedSig + 0x0A);
+	oringinalHorizontalPanSpeed = ashita.memory.read_float(horizontalPanSpeedPtr)
+	
+	--Vertical Cam Pan Speed
+	local vPanSpeedSig = ashita.memory.find('FFXiMain.dll', 0, 'D84C24248B168BCED80D', 0, 0);
+	if (vPanSpeedSig == 0) then error('Failed to locate vPanSpeedSig!'); end
+	
+	verticalPanSpeedPtr = ashita.memory.read_uint32(vPanSpeedSig + 0x0A);
+	oringinalVerticalPanSpeed = ashita.memory.read_float(verticalPanSpeedPtr)
+		
 	-- SET CAMERA DISTANCE BASED ON configs
 	setCameraDistance(configs.distance)
 	
 	-- SET BATTLE DISTANCE BASED ON configs
 	setBattleCameraDistance(configs.battleDistance)
+	
+	-- SET HORIZONTAL PAN SPEED BASED ON configs
+	setHorizontalPanSpeed(configs.horizontalPanSpeed)
+	
+	-- SET VERTICAL PAN SPEED BASED ON configs
+	setVerticalPanSpeed(configs.verticalPanSpeed)
 
 end);
 
@@ -204,7 +193,6 @@ ashita.events.register('command', 'camera_command', function(e)
             if (tonumber(command_args[3])) then
                 local newDistance = tonumber(command_args[3])
                 setCameraDistance(newDistance)
-                setCameraSpeed(newDistance / 6.0)
                 update_settings()
                 print("Distance changed to " .. newDistance)
             end
@@ -214,15 +202,33 @@ ashita.events.register('command', 'camera_command', function(e)
 				setBattleCameraDistance(newDistance)
                 update_settings()
                 print("Battle distance changed to " .. newDistance)
-            end	
+            end
+		elseif table.contains({'hspeed', 'hs'}, command_args[2]) then
+            if (tonumber(command_args[3])) then
+                local newSpeed = tonumber(command_args[3])
+				setHorizontalPanSpeed(newSpeed)
+                update_settings()
+                print("Horizontal pan speed changed to " .. newSpeed)
+            end
+		elseif table.contains({'vspeed', 'vs'}, command_args[2]) then
+            if (tonumber(command_args[3])) then
+                local newSpeed = tonumber(command_args[3])
+				setVerticalPanSpeed(newSpeed)
+                update_settings()
+                print("Vertical pan speed changed to " .. newSpeed)
+            end
         elseif table.contains({'help', 'h'}, command_args[2]) then
-            print("Set Distance: </camera|/cam> <distance|d> <###>")
-			print("Set Distance: </camera|/cam> <battle|b> <###>")
+            print("Set Distance: </camera|/cam> <distance|d> <###> - FFXI Default: 6")
+			print("Set Battle Distance: </camera|/cam> <battle|b> <###> - FFXI Default 8")
+			print("Set Horizontal Pan Speed: </camera|/cam> <hspeed|hs> <###> - FFXI Default 3")
+			print("Set Vertical Pan Speed: </camera|/cam> <vspeed|vs> <###> - FFXI Default 10")
             print("Status: </camera|/cam> <status|s>")
 		elseif table.contains({'status', 's'}, command_args[2]) then
 			print("- status")
 			print("-  cameraDistance: " .. configs.distance)
 			print("-  battleDistance: " .. configs.battleDistance)
+			print("-  horizontalPanSpeed: " .. configs.horizontalPanSpeed)
+			print("-  verticalPanSpeed: " .. configs.verticalPanSpeed)
         end
     end
 
@@ -230,19 +236,6 @@ ashita.events.register('command', 'camera_command', function(e)
 end)
 
 local restorePointers = function()
-    if (injectionPoint ~= 0 and injectionPoint ~= nil) then
-        ashita.memory.write_array(injectionPoint, originalValues)
-        injectionPoint = nil
-    end
-    if (speedAdjustment ~= 0 and speedAdjustment ~= nil) then
-        ashita.memory.dealloc(speedAdjustment, 4)
-        speedAdjustment = nil
-    end
-    if (codeCave ~= 0 and codeCave ~= nil) then
-        ashita.memory.dealloc(codeCave, 17)
-        codeCave = nil
-    end
-	
 	if (minDistancePtr ~= 0 and minDistancePtr ~= nil) then
 		ashita.memory.write_float(minDistancePtr, originalMinDistance)
 	end
@@ -254,6 +247,13 @@ local restorePointers = function()
 	end
 	if (maxBattleDistancePtr ~= 0 and maxBattleDistancePtr ~= nil) then
 		ashita.memory.write_float(maxBattleDistancePtr, originalMaxBattleDistance)
+	end
+	
+	if (horizontalPanSpeedPtr ~= 0 and horizontalPanSpeedPtr ~= nil) then
+		ashita.memory.write_float(horizontalPanSpeedPtr, oringinalHorizontalPanSpeed)
+	end
+	if (verticalPanSpeedPtr ~= 0 and verticalPanSpeedPtr ~= nil) then
+		ashita.memory.write_float(verticalPanSpeedPtr, oringinalVerticalPanSpeed)
 	end
 	
 	if (zoomSetupSig ~= 0 and zoomSetupSig ~= nil) then

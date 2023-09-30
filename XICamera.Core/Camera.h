@@ -32,6 +32,12 @@ namespace XICamera
 			bool setBattleDistance(const int& newDistance);
 			const int& battleDistance(void) const { return m_battleDistance; }
 
+			bool setHorizontalPanSpeed(const int& newSpeed);
+			const int& horizontalPanSpeed(void) const { return m_horizontalPanSpeed; }
+
+			bool setVerticalPanSpeed(const int& newSpeed);
+			const int& verticalPanSpeed(void) const { return m_verticalPanSpeed; }
+
 		public:
 			static Camera& instance(void);
 
@@ -44,6 +50,8 @@ namespace XICamera
 			bool m_cameraSet;
 			int m_cameraDistance;
 			int m_battleDistance;
+			int m_horizontalPanSpeed;
+			int m_verticalPanSpeed;
 
 			ILogProvider::LogLevel m_logDebug;
 			ILogProvider* m_logger;
