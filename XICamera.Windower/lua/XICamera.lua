@@ -44,6 +44,7 @@ defaults = T{
 	horizontalPanSpeed = 3.0,
 	verticalPanSpeed = 10.7,
 	saveOnIncrement = false,
+	autoCalcVertSpeed = true,
 }
 
 settings = config.load(defaults)
@@ -57,7 +58,11 @@ windower.register_event('load', function()
     _XICamera.set_camera_distance(settings.cameraDistance)
 	_XICamera.set_battle_distance(settings.battleDistance)
 	_XICamera.set_horizontal_pan_speed(settings.horizontalPanSpeed)
-	_XICamera.set_vertical_pan_speed(settings.verticalPanSpeed)
+	if settings.autoCalcVertSpeed then
+		_XICamera.set_vertical_pan_speed(defaults.verticalPanSpeed * settings.cameraDistance / 6)
+	else
+		_XICamera.set_vertical_pan_speed(settings.verticalPanSpeed)
+	end
     _XICamera.enable()
 end)
 
@@ -71,16 +76,17 @@ windower.register_event('addon command', function(command, ...)
 
 	if table.contains(T{'help', 'h'}, command)  then
 		windower.add_to_chat(8, _addon.name .. ' v.' .. _addon.version)
-		windower.add_to_chat(8, '   d|distance # - sets the camera distance')
-		windower.add_to_chat(8, '   b|battle # - sets the camera distance')
-		windower.add_to_chat(8, '   hs|hspeed # - sets the horizontal pan speed')
-		windower.add_to_chat(8, '   vs|vspeed # - sets the vertical pan')
+		windower.add_to_chat(8, '   d|distance # - sets the camera distance - default: 6')
+		windower.add_to_chat(8, '   b|battle # - sets the camera distance - default: 8')
+		windower.add_to_chat(8, '   hs|hspeed # - sets the horizontal pan speed - default: 3')
+		windower.add_to_chat(8, '   vs|vspeed # - sets the vertical pan - default: 10, forces auto calc off')
 		windower.add_to_chat(8, '   s|status - Print status and diagnostic info')
 		windower.add_to_chat(8, '   in|incr - Increment current camera distance by one')
         windower.add_to_chat(8, '   de|decr - Decrement current camera distance by one')
 		windower.add_to_chat(8, '   bin|bincr - Increment current battle camera distance by one')
         windower.add_to_chat(8, '   bde|bdecr - Decrement current battle camera distance by one')
-		windower.add_to_chat(8, '   saveOnIncrement|soi - Toggles Saving on increment/decrement behavior')
+		windower.add_to_chat(8, '   saveOnIncrement|soi - Toggles Saving on increment/decrement behavior - default: off')
+		windower.add_to_chat(8, '   autoCalcVertSpeed|acv - Toggles Vertical pan speed autocalc - default: on')
 
 	elseif table.contains(T{'distance', 'd'}, command) then
 		if not args[1] then
@@ -92,6 +98,10 @@ windower.register_event('addon command', function(command, ...)
             windower.add_to_chat(8, 'set camera distance to "' .. tonumber(args[1]) .. '"')
             settings.cameraDistance = tonumber(args[1])
 			config.save(settings)
+
+			if settings.autoCalcVertSpeed then
+				_XICamera.set_vertical_pan_speed(defaults.verticalPanSpeed * settings.cameraDistance / 6)
+			end
 		else
 			windower.add_to_chat(8, 'failed to change distance "' .. args[1] .. '"')
 		end
@@ -130,6 +140,7 @@ windower.register_event('addon command', function(command, ...)
 		if _XICamera.set_vertical_pan_speed(tonumber(args[1])) > 0 then
             windower.add_to_chat(8, 'set vertical pan speed to "' .. tonumber(args[1]) .. '"')
             settings.verticalPanSpeed = tonumber(args[1])
+			settings.autoCalcVertSpeed = false
 			config.save(settings)
 		else
 			windower.add_to_chat(8, 'failed to vertical pan speed "' .. args[1] .. '"')
@@ -150,6 +161,10 @@ windower.register_event('addon command', function(command, ...)
 		settings.saveOnIncrement = not settings.saveOnIncrement
 		windower.add_to_chat(8, 'set saveOnIncrement to "' .. tostring(settings.saveOnIncrement) .. '"')
 		config.save(settings)
+	elseif table.contains({'autocalcvertspeed', 'acv'}, command) then
+		settings.autoCalcVertSpeed = not settings.autoCalcVertSpeed
+		windower.add_to_chat(8, "autoCalcVertSpeed changed to " .. tostring(settings.autoCalcVertSpeed))
+		config.save(settings)
 	elseif table.contains(T{'status', 's'}, command) then
 		local stats = _XICamera.status()
 		windower.add_to_chat(127,'- status')
@@ -158,5 +173,6 @@ windower.register_event('addon command', function(command, ...)
 		windower.add_to_chat(127, '-  horizontalPanSpeed: ' .. stats['horizontalPanSpeed'])
 		windower.add_to_chat(127, '-  verticalPanSpeed: ' .. stats['verticalPanSpeed'])
 		windower.add_to_chat(127, '-  saveOnIncrement: ' .. tostring(settings.saveOnIncrement))
+		windower.add_to_chat(127, '-  autoCalcVertSpeed: ' .. tostring(settings.autoCalcVertSpeed))
 	end
 end)

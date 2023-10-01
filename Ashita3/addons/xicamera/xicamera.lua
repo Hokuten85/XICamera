@@ -14,6 +14,7 @@ local default_config =
 	horizontalPanSpeed = 3.0,
 	verticalPanSpeed = 10.7,
 	saveOnIncrement = false,
+	autoCalcVertSpeed = true,
 }
 local configs = default_config
 ----------------------------------------------------------------------------------------------------
@@ -41,26 +42,30 @@ local oringinalHorizontalPanSpeed
 local verticalPanSpeedPtr
 local oringinalVerticalPanSpeed
 
-local setCameraDistance = function(newDistance)
-	configs.distance = newDistance
-	ashita.memory.write_float(minDistancePtr, newDistance - (originalMaxDistance - originalMinDistance))
-	ashita.memory.write_float(maxDistancePtr, newDistance)
-end
-
-local setBattleCameraDistance = function(newDistance)
-	configs.battleDistance = newDistance
-	ashita.memory.write_float(minBattleDistancePtr, newDistance - (originalMaxBattleDistance - originalMinBattleDistance))
-	ashita.memory.write_float(maxBattleDistancePtr, newDistance)
-end
-
 local setHorizontalPanSpeed = function(newSpeed)
 	configs.horizontalPanSpeed = newSpeed 
 	ashita.memory.write_float(horizontalPanSpeedPtr, newSpeed / 100.0)
 end
 
 local setVerticalPanSpeed = function(newSpeed)
-	configs.verticalPanSpeed = newSpeed 
+	configs.verticalPanSpeed = newSpeed
 	ashita.memory.write_float(verticalPanSpeedPtr, newSpeed / 100.0)
+end
+
+local setCameraDistance = function(newDistance)
+	configs.distance = newDistance
+	ashita.memory.write_float(minDistancePtr, newDistance - (originalMaxDistance - originalMinDistance))
+	ashita.memory.write_float(maxDistancePtr, newDistance)
+
+	if configs.autoCalcVertSpeed then
+		setVerticalPanSpeed(default_config.verticalPanSpeed * newDistance / 6.0)
+	end
+end
+
+local setBattleCameraDistance = function(newDistance)
+	configs.battleDistance = newDistance
+	ashita.memory.write_float(minBattleDistancePtr, newDistance - (originalMaxBattleDistance - originalMinBattleDistance))
+	ashita.memory.write_float(maxBattleDistancePtr, newDistance)
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -159,7 +164,9 @@ ashita.register_event('load', function()
 	setHorizontalPanSpeed(configs.horizontalPanSpeed)
 	
 	-- SET VERTICAL PAN SPEED BASED ON configs
-	setVerticalPanSpeed(configs.verticalPanSpeed)
+	if not configs.autoCalcVertSpeed then
+		setVerticalPanSpeed(configs.verticalPanSpeed)
+	end
 end)
 
 ashita.register_event('command', function(command, ntype)
@@ -190,6 +197,7 @@ ashita.register_event('command', function(command, ntype)
             if (tonumber(command_args[3])) then
                 local newSpeed = tonumber(command_args[3])
 				setVerticalPanSpeed(newSpeed)
+				configs.autoCalcVertSpeed = false
                 ashita.settings.save(_addon.path .. '/settings/settings.json', configs)
                 print("Vertical pan speed changed to " .. newSpeed)
             end
@@ -205,16 +213,21 @@ ashita.register_event('command', function(command, ntype)
 			configs.saveOnIncrement = not configs.saveOnIncrement
 			print("saveOnIncrement changed to " .. tostring(configs.saveOnIncrement))
 			ashita.settings.save(_addon.path .. '/settings/settings.json', configs)
+		elseif table.hasvalue({'autocalcvertspeed', 'acv'}, command_args[2]) then
+			configs.autoCalcVertSpeed = not configs.autoCalcVertSpeed
+			print("autoCalcVertSpeed changed to " .. tostring(configs.autoCalcVertSpeed))
+			ashita.settings.save(_addon.path .. '/settings/settings.json', configs)
         elseif table.hasvalue({'help', 'h'}, command_args[2]) then
             print("Set Distance: </camera|/cam> <distance|d> <###> - FFXI Default: 6")
-			print("Set Battle Distance: </camera|/cam> <battle|b> <###> - FFXI Default 8")
-			print("Set Horizontal Pan Speed: </camera|/cam> <hspeed|hs> <###> - FFXI Default 3")
-			print("Set Vertical Pan Speed: </camera|/cam> <vspeed|vs> <###> - FFXI Default 10")
+			print("Set Battle Distance: </camera|/cam> <battle|b> <###> - FFXI Default: 8")
+			print("Set Horizontal Pan Speed: </camera|/cam> <hspeed|hs> <###> - FFXI Default: 3")
+			print("Set Vertical Pan Speed: </camera|/cam> <vspeed|vs> <###> - FFXI Default: 10, forces auto calc off")
 			print("Increments Distance: </camera|/cam> <incr|in>")
 			print("Decrements Distance: </camera|/cam> <de|decr>")
 			print("Increments Battle Distance: </camera|/cam> <bin|bincr>")
 			print("Decrements Battle Distance: </camera|/cam> <bde|bdecr>")
-			print("Toggles save on Increment/Decrement behavior: </camera|/cam> <saveOnIncrement|soi>")
+			print("Toggles save on Increment/Decrement behavior: </camera|/cam> <saveOnIncrement|soi> - Default: off")
+			print("Toggles Vertical pan speed autocalc: </camera|/cam> <autoCalcVertSpeed|acv> - Default: on")
 			print("Status: </camera|/cam> <status|s>")
 		elseif table.hasvalue({'status', 's'}, command_args[2]) then
 			print("- status")
@@ -223,6 +236,7 @@ ashita.register_event('command', function(command, ntype)
 			print("-  horizontalPanSpeed: " .. configs.horizontalPanSpeed)
 			print("-  verticalPanSpeed: " .. configs.verticalPanSpeed)
 			print("-  saveOnIncrement: " .. tostring(configs.saveOnIncrement))
+			print("-  autoCalcVertSpeed: " .. tostring(configs.autoCalcVertSpeed))
         end
     end
 
