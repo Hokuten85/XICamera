@@ -28,12 +28,13 @@
 
 _addon.name = 'XICamera'
 _addon.author = 'Hokuten'
-_addon.version = '0.7.7'
+_addon.version = '0.7.8'
 _addon.commands = {'camera','cam','xicamera','xicam'}
 
 config = require('config')
 require('pack')
 require('lists')
+require('tables')
 
 -- package.cpath somehow doesn't appreciate backslashes
 local addon_path = windower.addon_path:gsub('\\', '/')
@@ -42,6 +43,7 @@ defaults = T{
 	battleDistance = 8.2,
 	horizontalPanSpeed = 3.0,
 	verticalPanSpeed = 10.7,
+	saveOnIncrement = false,
 }
 
 settings = config.load(defaults)
@@ -67,15 +69,20 @@ windower.register_event('addon command', function(command, ...)
 	command = command and command:lower() or 'help'
 	local args = L{...}
 
-	if command == 'help' or command == 'h' then
+	if table.contains(T{'help', 'h'}, command)  then
 		windower.add_to_chat(8, _addon.name .. ' v.' .. _addon.version)
 		windower.add_to_chat(8, '   d|distance # - sets the camera distance')
 		windower.add_to_chat(8, '   b|battle # - sets the camera distance')
 		windower.add_to_chat(8, '   hs|hspeed # - sets the horizontal pan speed')
 		windower.add_to_chat(8, '   vs|vspeed # - sets the vertical pan')
 		windower.add_to_chat(8, '   s|status - Print status and diagnostic info')
+		windower.add_to_chat(8, '   in|incr - Increment current camera distance by one')
+        windower.add_to_chat(8, '   de|decr - Decrement current camera distance by one')
+		windower.add_to_chat(8, '   bin|bincr - Increment current battle camera distance by one')
+        windower.add_to_chat(8, '   bde|bdecr - Decrement current battle camera distance by one')
+		windower.add_to_chat(8, '   saveOnIncrement|soi - Toggles Saving on increment/decrement behavior')
 
-	elseif command == 'distance' or command == 'd' then
+	elseif table.contains(T{'distance', 'd'}, command) then
 		if not args[1] then
 			error('Invalid syntax: //camera distance <number>')
 			return
@@ -88,7 +95,7 @@ windower.register_event('addon command', function(command, ...)
 		else
 			windower.add_to_chat(8, 'failed to change distance "' .. args[1] .. '"')
 		end
-	elseif command == 'battle' or command == 'b' then
+	elseif table.contains(T{'battle', 'b'}, command) then
 		if not args[1] then
 			error('Invalid syntax: //camera battle <number>')
 			return
@@ -101,7 +108,7 @@ windower.register_event('addon command', function(command, ...)
 		else
 			windower.add_to_chat(8, 'failed to change battle distance "' .. args[1] .. '"')
 		end
-	elseif command == 'hspeed' or command == 'hs' then
+	elseif table.contains(T{'hspeed', 'hs'}, command) then
 		if not args[1] then
 			error('Invalid syntax: //camera hspeed <number>')
 			return
@@ -114,7 +121,7 @@ windower.register_event('addon command', function(command, ...)
 		else
 			windower.add_to_chat(8, 'failed to horizontal pan speed "' .. args[1] .. '"')
 		end
-	elseif command == 'vspeed' or command == 'vs' then
+	elseif table.contains(T{'vspeed', 'vs'}, command) then
 		if not args[1] then
 			error('Invalid syntax: //camera vspeed <number>')
 			return
@@ -127,12 +134,29 @@ windower.register_event('addon command', function(command, ...)
 		else
 			windower.add_to_chat(8, 'failed to vertical pan speed "' .. args[1] .. '"')
 		end
-	elseif command == 'status' or command == 's' then
+	elseif table.contains(T{'incr', 'in', 'bincr', 'bin', 'decr', 'de', 'bdecr', 'bde'}, command) then
+		local isIncr = string.find(command, 'in')
+		local isBattle = string.find(command, 'b')
+		local newDistance = (isBattle and settings.battleDistance or settings.cameraDistance) + (isIncr and 1 or -1)
+		local camTypeFunction = isBattle and _XICamera.set_battle_distance or _XICamera.set_camera_distance
+		if camTypeFunction(newDistance) > 0 then
+			windower.add_to_chat(8, 'set ' .. (isBattle and 'battle ' or '') .. 'camera distance to "' .. newDistance .. '"')
+			if isBattle then settings.battleDistance = newDistance else settings.cameraDistance = newDistance end
+			if settings.saveOnIncrement then config.save(settings) end
+		else
+			windower.add_to_chat(8, 'failed to change ' .. (isBattle and 'battle ' or '') .. 'distance "' .. newDistance .. '"')
+		end
+	elseif table.contains(T{'saveOnIncrement', 'soi'}, command) then
+		settings.saveOnIncrement = not settings.saveOnIncrement
+		windower.add_to_chat(8, 'set saveOnIncrement to "' .. tostring(settings.saveOnIncrement) .. '"')
+		config.save(settings)
+	elseif table.contains(T{'status', 's'}, command) then
 		local stats = _XICamera.status()
 		windower.add_to_chat(127,'- status')
 		windower.add_to_chat(127, '-  cameraDistance: ' .. stats['cameraDistance'])
 		windower.add_to_chat(127, '-  battleDistance: ' .. stats['battleDistance'])
 		windower.add_to_chat(127, '-  horizontalPanSpeed: ' .. stats['horizontalPanSpeed'])
 		windower.add_to_chat(127, '-  verticalPanSpeed: ' .. stats['verticalPanSpeed'])
+		windower.add_to_chat(127, '-  saveOnIncrement: ' .. tostring(settings.saveOnIncrement))
 	end
 end)

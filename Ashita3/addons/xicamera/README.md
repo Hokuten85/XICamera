@@ -11,12 +11,17 @@ XICamera is an addon that allows to change the camera distance.
 XICamera makes the in-game command /camera|/cam|/xicamera|/xicam available to adjust various behaviors of the camera on the fly.
 The following parameters are supported:
 
-- d/distance # -- will change the camera distance
-- b/battle #   -- will change the battle camera distance
-- hs/hspeed #   -- will change the horizontal panning speed
-- vs/vspeed #   -- will change the vertical panning speed
-- h/help       -- print help text
-- s/status       -- print status
+- d/distance #        -- will change the camera distance
+- b/battle #          -- will change the battle camera distance
+- hs/hspeed #         -- will change the horizontal panning speed
+- vs/vspeed #         -- will change the vertical panning speed
+- in/incr		      -- will increment camera distance by 1
+- de/decr		      -- will decrement camera distance by 1
+- bin/bincr		      -- will increment battle camera distance by 1
+- bde/bdecr		      -- will decrement battle camera distance by 1
+- saveOnIncrement/soi -- will toggle saving behavior on incr/decr. By default this is off
+- h/help              -- print help text
+- s/status            -- print status
 
 These commands all support a short version (d/b/hs/vs/h/s).
 Changes made with distance will be saved in the ashita config directory.
