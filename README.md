@@ -20,9 +20,7 @@ Use at your own discretion, I take no responsibility for any client crashes or d
 
 ## Special Thanks
 
-I'd first like to thank the creator of XIPivot. A huge majority of this code base was borrowed directly from that project. I didn't know how to do a majority of this, but after looking through that code base it gave me confidence that I could do something similar.
-
-I'd also like to thank the Darkstar Project and Xiloader team. The code injection is largely copy/paste from xiloader.
+I'd first like to thank the creator of XIPivot. A huge majority of the original code base was borrowed directly from that project. I didn't know how to do a majority of this, but after looking through that code base it gave me confidence that I could do something similar.
 
 ## Support/Contributions
 
