@@ -13,6 +13,10 @@ XICamera works together with [Ashita v3](https://www.ashitaxi.com) as well as [W
 - Head over to the [Releases page](https://github.com/Hokuten85/XICamera/releases) and pick the ZIP that matches your launcher
 - Follow the README.md inside the archive for setup and configuration instructions
 
+- May need C++ redistributable.
+-   https://aka.ms/vs/17/release/vc_redist.x64.exe
+-   https://aka.ms/vs/17/release/vc_redist.x86.exe
+
 ## Disclaimer
 
 I tested XICamera to the best of my capabilities but I can not guarantee that it works without bugs for 100% of the time.
