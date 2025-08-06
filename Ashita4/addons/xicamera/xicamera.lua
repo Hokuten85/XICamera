@@ -1,6 +1,6 @@
 addon.author   = 'Hokuten'
 addon.name     = 'xicamera'
-addon.version  = '0.7.8'
+addon.version  = '0.7.9'
 addon.desc     = 'Modifies the camera distance from the player.'
 
 local common = require('common')
@@ -44,10 +44,6 @@ local oringinalHorizontalPanSpeed
 local verticalPanSpeedPtr
 local oringinalVerticalPanSpeed
 
-
-----------------------------------------------------------------------------------------------------
--- config helpers
-----------------------------------------------------------------------------------------------------
 --[[
 * Updates the addon settings.
 *
@@ -61,6 +57,8 @@ local function update_settings(s)
 
     -- Save the current settings..
     settings.save()
+	
+	setDistances()
 end
 
 --[[
@@ -68,17 +66,17 @@ end
 --]]
 settings.register('settings', 'settings_update', update_settings)
 
-local setHorizontalPanSpeed = function(newSpeed)
+function setHorizontalPanSpeed(newSpeed)
 	configs.horizontalPanSpeed = newSpeed 
 	ashita.memory.write_float(horizontalPanSpeedPtr, newSpeed / 100.0)
 end
 
-local setVerticalPanSpeed = function(newSpeed)
+function setVerticalPanSpeed(newSpeed)
 	configs.verticalPanSpeed = newSpeed
 	ashita.memory.write_float(verticalPanSpeedPtr, newSpeed / 100.0)
 end
 
-local setCameraDistance = function(newDistance)
+function setCameraDistance(newDistance)
 	configs.distance = newDistance
 	ashita.memory.write_float(minDistancePtr, newDistance - (originalMaxDistance - originalMinDistance))
 	ashita.memory.write_float(maxDistancePtr, newDistance)
@@ -88,10 +86,26 @@ local setCameraDistance = function(newDistance)
 	end
 end
 
-local setBattleCameraDistance = function(newDistance)
+function setBattleCameraDistance(newDistance)
 	configs.battleDistance = newDistance
 	ashita.memory.write_float(minBattleDistancePtr, newDistance - (originalMaxBattleDistance - originalMinBattleDistance))
 	ashita.memory.write_float(maxBattleDistancePtr, newDistance)
+end
+
+function setDistances()
+	-- SET CAMERA DISTANCE BASED ON configs
+	setCameraDistance(configs.distance)
+	
+	-- SET BATTLE DISTANCE BASED ON configs
+	setBattleCameraDistance(configs.battleDistance)
+	
+	-- SET HORIZONTAL PAN SPEED BASED ON configs
+	setHorizontalPanSpeed(configs.horizontalPanSpeed)
+	
+	-- SET VERTICAL PAN SPEED BASED ON configs
+	if not configs.autoCalcVertSpeed then
+		setVerticalPanSpeed(configs.verticalPanSpeed)
+	end
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -177,19 +191,7 @@ ashita.events.register('load', 'camera_load', function()
 	verticalPanSpeedPtr = ashita.memory.read_uint32(vPanSpeedSig + 0x0A)
 	oringinalVerticalPanSpeed = ashita.memory.read_float(verticalPanSpeedPtr)
 		
-	-- SET CAMERA DISTANCE BASED ON configs
-	setCameraDistance(configs.distance)
-	
-	-- SET BATTLE DISTANCE BASED ON configs
-	setBattleCameraDistance(configs.battleDistance)
-	
-	-- SET HORIZONTAL PAN SPEED BASED ON configs
-	setHorizontalPanSpeed(configs.horizontalPanSpeed)
-	
-	-- SET VERTICAL PAN SPEED BASED ON configs
-	if not configs.autoCalcVertSpeed then
-		setVerticalPanSpeed(configs.verticalPanSpeed)
-	end
+	setDistances()
 end)
 
 ashita.events.register('command', 'camera_command', function(e)
