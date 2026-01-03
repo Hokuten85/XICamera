@@ -16,8 +16,8 @@ settings.xml:
     <global>
 	<cameraDistance>6</cameraDistance>
 	<battleDistance>8.2</battleDistance>
-	<horizontalPanSpeed>3</cameraDistance>
-	<verticalPanSpeed>10.7</battleDistance>
+	<horizontalPanSpeed>3</horizontalPanSpeed>
+	<verticalPanSpeed>10.7</verticalPanSpeed>
     </global>
 </settings>
 ```
