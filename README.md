@@ -14,8 +14,8 @@ XICamera works together with [Ashita v3](https://www.ashitaxi.com) as well as [W
 - Follow the README.md inside the archive for setup and configuration instructions
 
 - May need C++ redistributable.
--   https://aka.ms/vs/17/release/vc_redist.x64.exe
--   https://aka.ms/vs/17/release/vc_redist.x86.exe
+-   https://aka.ms/vc14/vc_redist.x86.exe
+-   https://aka.ms/vc14/vc_redist.x64.exe
 
 ## Disclaimer
 
