@@ -23,16 +23,16 @@
     <None Include="module\exports.def" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\XICamera.Core\XICamera.Core.vcxproj">
-      <Project>{b6984137-e257-4582-8b3c-7cd810f37c50}</Project>
-    </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
     <ClInclude Include="src\WindowerInterface.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\lua_module.cpp" />
     <ClCompile Include="src\Windowerinterface.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\XICamera.Core\XICamera.Core.vcxproj">
+      <Project>{b6984137-e257-4582-8b3c-7cd810f37c50}</Project>
+    </ProjectReference>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
@@ -142,18 +142,21 @@ xcopy /Y /Q "$(OutDir)$(TargetName)$(TargetExt)" "$(SolutionDir)build\$(Configur
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
-      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;XICAMERAWINDOWER_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>D:\source\repos\XICamera\3rdParty\SDKs\Windower\LUA;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
+      <AdditionalLibraryDirectories>
+      </AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -192,7 +195,7 @@ xcopy /Y /Q "$(OutDir)$(TargetName)$(TargetExt)" "$(SolutionDir)build\$(Configur
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
-      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
@@ -201,6 +204,7 @@ xcopy /Y /Q "$(OutDir)$(TargetName)$(TargetExt)" "$(SolutionDir)build\$(Configur
       <PreprocessorDefinitions>NDEBUG;XICAMERAWINDOWER_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>D:\source\repos\XICamera\3rdParty\SDKs\Windower\LUA;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -208,6 +212,8 @@ xcopy /Y /Q "$(OutDir)$(TargetName)$(TargetExt)" "$(SolutionDir)build\$(Configur
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
+      <AdditionalLibraryDirectories>
+      </AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

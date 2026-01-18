@@ -36,7 +36,7 @@ extern "C"
 #	include "lua.h"
 }
 
-#include "Camera.h"
+#include "../../XICamera.Core/Camera.h"
 
 namespace XICamera
 {

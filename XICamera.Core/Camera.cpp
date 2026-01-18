@@ -20,6 +20,8 @@ namespace XICamera
 		DWORD g_BattleSoundAddress;
 		DWORD g_horizontalPanAddress; // horizontal pan address.
 		DWORD g_verticalPanAddress; // vertical pan address.
+		DWORD g_jitterSignature;
+		DWORD g_originalJitterAddress;
 
 		float g_OriginalMinDistance;
 		float g_OriginalMaxDistance;
@@ -28,6 +30,7 @@ namespace XICamera
 		float g_NewMinDistance;
 		float g_OriginalHorizontalPanSpeed;
 		float g_OriginalVerticalPanSpeed;
+		float g_newJitter = 1.0f;
 
 		Camera& Camera::instance(void)
 		{
@@ -136,7 +139,7 @@ namespace XICamera
 				if (g_horizontalPanAddress == 0)
 				{
 					removeCamera();
-					m_logger->logMessage(ILogProvider::LogLevel::Info, "could not horizontal pan position");
+					m_logger->logMessage(ILogProvider::LogLevel::Info, "could not find horizontal pan position");
 					return 0;
 				}
 				g_OriginalHorizontalPanSpeed = *(FLOAT*)(g_horizontalPanAddress);
@@ -145,10 +148,21 @@ namespace XICamera
 				if (g_verticalPanAddress == 0)
 				{
 					removeCamera();
-					m_logger->logMessage(ILogProvider::LogLevel::Info, "could not vertical pan position");
+					m_logger->logMessage(ILogProvider::LogLevel::Info, "could not find vertical pan position");
 					return 0;
 				}
 				g_OriginalVerticalPanSpeed = *(FLOAT*)(g_verticalPanAddress);
+
+				g_jitterSignature = *(DWORD*)XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\x8D\x54\x24\x2C\x8D\x44\x24\x2C\xD8\xC9\x52\x55\x50", "xxxxxxxxxxxxx");
+				if (g_jitterSignature == 0)
+				{
+					removeCamera();
+					m_logger->logMessage(ILogProvider::LogLevel::Info, "could not find jitter signature");
+					return 0;
+				}
+				g_originalJitterAddress = *(FLOAT*)(g_jitterSignature + 0x0F);
+				*(DWORD*)(g_jitterSignature + 0x0F) = (DWORD)&g_newJitter;
+				*(DWORD*)(g_jitterSignature + 0x1F) = (DWORD)&g_newJitter;
 
 
 				setCameraDistance(m_cameraDistance);
@@ -232,6 +246,11 @@ namespace XICamera
 			if (g_BattleSoundAddress != 0)
 			{
 				*(DWORD*)g_BattleSoundAddress = g_MinCameraAddress;
+			}
+			if (g_jitterSignature != 0)
+			{
+				*(DWORD*)(g_jitterSignature + 0x0F) = g_originalJitterAddress;
+				*(DWORD*)(g_jitterSignature + 0x1F) = g_originalJitterAddress;
 			}
 
 			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_cameraSet = %s", m_cameraSet ? "true" : "false");

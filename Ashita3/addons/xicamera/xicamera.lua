@@ -42,6 +42,10 @@ local oringinalHorizontalPanSpeed
 local verticalPanSpeedPtr
 local oringinalVerticalPanSpeed
 
+local jittersSig
+local newJitterPtr
+local originalJitterPtr
+
 local setHorizontalPanSpeed = function(newSpeed)
 	configs.horizontalPanSpeed = newSpeed 
 	ashita.memory.write_float(horizontalPanSpeedPtr, newSpeed / 100.0)
@@ -153,6 +157,18 @@ ashita.register_event('load', function()
 	
 	verticalPanSpeedPtr = ashita.memory.read_uint32(vPanSpeedSig + 0x0A)
 	oringinalVerticalPanSpeed = ashita.memory.read_float(verticalPanSpeedPtr)
+
+	-- Camera jitters
+	jittersSig = ashita.memory.findpattern('FFXiMain.dll', 0, '8D54242C8D44242CD8C9525550', 0, 0)
+	if (jittersSig == 0) then error('Failed to locate jittersSig!') end
+	
+	newJitterPtr = ashita.memory.alloc(4)
+    ashita.memory.write_float(newJitterPtr, 1.0) -- 1.0 eliminates the 0.125 multiplier that shrinks the camera distance
+	
+	originalJitterPtr = ashita.memory.read_uint32(jittersSig + 0x0F)
+	
+	ashita.memory.write_uint32(jittersSig + 0x0F, newJitterPtr)
+	ashita.memory.write_uint32(jittersSig + 0x1F, newJitterPtr)
 	
 	-- SET CAMERA DISTANCE BASED ON configs
 	setCameraDistance(configs.distance)
@@ -286,5 +302,10 @@ ashita.register_event('unload', function()
 	if (battleSoundSig ~= 0 and battleSoundSig ~= nil) then
 		ashita.memory.write_uint32(battleSoundSig + 0x0F, originalMinDistancePtr)
 		ashita.memory.dealloc(newMinDistanceConstant, 4)
+	end
+	if (jittersSig ~= 0 and jittersSig ~= nil) then
+		ashita.memory.write_uint32(jittersSig + 0x0F, originalJitterPtr)
+		ashita.memory.write_uint32(jittersSig + 0x1F, originalJitterPtr)
+		ashita.memory.dealloc(newJitterPtr, 4)
 	end
 end)

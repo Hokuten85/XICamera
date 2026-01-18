@@ -1,6 +1,6 @@
 addon.author   = 'Hokuten'
 addon.name     = 'xicamera'
-addon.version  = '0.7.9'
+addon.version  = '0.7.10'
 addon.desc     = 'Modifies the camera distance from the player.'
 
 local common = require('common')
@@ -43,6 +43,10 @@ local horizontalPanSpeedPtr
 local oringinalHorizontalPanSpeed
 local verticalPanSpeedPtr
 local oringinalVerticalPanSpeed
+
+local jittersSig
+local newJitterPtr
+local originalJitterPtr
 
 --[[
 * Updates the addon settings.
@@ -177,19 +181,31 @@ ashita.events.register('load', 'camera_load', function()
 	-- Write new memloc to npc walk animation
 	ashita.memory.write_uint32(battleSoundSig + 0x0F, newMinDistanceConstant)
 	
-	--Horizontal Cam Pan Speed
+	-- Horizontal Cam Pan Speed
 	local hPanSpeedSig = ashita.memory.find('FFXiMain.dll', 0, 'D84C24208B068BCED80D', 0, 0)
 	if (hPanSpeedSig == 0) then error('Failed to locate hPanSpeedSig!') end
 	
 	horizontalPanSpeedPtr = ashita.memory.read_uint32(hPanSpeedSig + 0x0A)
 	oringinalHorizontalPanSpeed = ashita.memory.read_float(horizontalPanSpeedPtr)
 	
-	--Vertical Cam Pan Speed
+	-- Vertical Cam Pan Speed
 	local vPanSpeedSig = ashita.memory.find('FFXiMain.dll', 0, 'D84C24248B168BCED80D', 0, 0)
 	if (vPanSpeedSig == 0) then error('Failed to locate vPanSpeedSig!') end
 	
 	verticalPanSpeedPtr = ashita.memory.read_uint32(vPanSpeedSig + 0x0A)
 	oringinalVerticalPanSpeed = ashita.memory.read_float(verticalPanSpeedPtr)
+	
+	-- Camera jitters
+	jittersSig = ashita.memory.find('FFXiMain.dll', 0, '8D54242C8D44242CD8C9525550', 0, 0)
+	if (jittersSig == 0) then error('Failed to locate jittersSig!') end
+	
+	newJitterPtr = ashita.memory.alloc(4)
+    ashita.memory.write_float(newJitterPtr, 1.0) -- 1.0 eliminates the 0.125 multiplier that shrinks the camera distance
+	
+	originalJitterPtr = ashita.memory.read_uint32(jittersSig + 0x0F)
+	
+	ashita.memory.write_uint32(jittersSig + 0x0F, newJitterPtr)
+	ashita.memory.write_uint32(jittersSig + 0x1F, newJitterPtr)
 		
 	setDistances()
 end)
@@ -281,14 +297,12 @@ local restorePointers = function()
 	if (maxBattleDistancePtr ~= 0 and maxBattleDistancePtr ~= nil) then
 		ashita.memory.write_float(maxBattleDistancePtr, originalMaxBattleDistance)
 	end
-	
 	if (horizontalPanSpeedPtr ~= 0 and horizontalPanSpeedPtr ~= nil) then
 		ashita.memory.write_float(horizontalPanSpeedPtr, oringinalHorizontalPanSpeed)
 	end
 	if (verticalPanSpeedPtr ~= 0 and verticalPanSpeedPtr ~= nil) then
 		ashita.memory.write_float(verticalPanSpeedPtr, oringinalVerticalPanSpeed)
 	end
-	
 	if (zoomSetupSig ~= 0 and zoomSetupSig ~= nil) then
 		ashita.memory.write_uint32(zoomSetupSig + 0x10, originalMinDistancePtr)
 		ashita.memory.dealloc(newMinDistanceConstant, 4)
@@ -304,6 +318,11 @@ local restorePointers = function()
 	if (battleSoundSig ~= 0 and battleSoundSig ~= nil) then
 		ashita.memory.write_uint32(battleSoundSig + 0x0F, originalMinDistancePtr)
 		ashita.memory.dealloc(newMinDistanceConstant, 4)
+	end
+	if (jittersSig ~= 0 and jittersSig ~= nil) then
+		ashita.memory.write_uint32(jittersSig + 0x0F, originalJitterPtr)
+		ashita.memory.write_uint32(jittersSig + 0x1F, originalJitterPtr)
+		ashita.memory.dealloc(newJitterPtr, 4)
 	end
 end
 

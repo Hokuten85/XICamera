@@ -28,7 +28,7 @@
 
 _addon.name = 'XICamera'
 _addon.author = 'Hokuten'
-_addon.version = '0.7.8'
+_addon.version = '0.7.10'
 _addon.commands = {'camera','cam','xicamera','xicam'}
 
 config = require('config')
@@ -36,8 +36,6 @@ require('pack')
 require('lists')
 require('tables')
 
--- package.cpath somehow doesn't appreciate backslashes
-local addon_path = windower.addon_path:gsub('\\', '/')
 defaults = T{
     cameraDistance = 6,
 	battleDistance = 8.2,
@@ -49,7 +47,8 @@ defaults = T{
 
 settings = config.load(defaults)
 config.save(settings)
-	
+
+local addon_path = windower.addon_path:gsub('\\', '/')	
 package.cpath = package.cpath .. ';' .. addon_path .. '/libs/?.dll'
 require('_XICamera')
 
