@@ -153,14 +153,14 @@ namespace XICamera
 				}
 				g_OriginalVerticalPanSpeed = *(FLOAT*)(g_verticalPanAddress);
 
-				g_jitterSignature = *(DWORD*)XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\x8D\x54\x24\x2C\x8D\x44\x24\x2C\xD8\xC9\x52\x55\x50", "xxxxxxxxxxxxx");
+				g_jitterSignature = XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\x8D\x54\x24\x2C\x8D\x44\x24\x2C\xD8\xC9\x52\x55\x50", "xxxxxxxxxxxxx");
 				if (g_jitterSignature == 0)
 				{
 					removeCamera();
 					m_logger->logMessage(ILogProvider::LogLevel::Info, "could not find jitter signature");
 					return 0;
 				}
-				g_originalJitterAddress = *(FLOAT*)(g_jitterSignature + 0x0F);
+				g_originalJitterAddress = *(DWORD*)(g_jitterSignature + 0x0F);
 				*(DWORD*)(g_jitterSignature + 0x0F) = (DWORD)&g_newJitter;
 				*(DWORD*)(g_jitterSignature + 0x1F) = (DWORD)&g_newJitter;
 
