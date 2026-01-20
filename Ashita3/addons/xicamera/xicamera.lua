@@ -1,6 +1,6 @@
 _addon.author   = 'Hokuten'
 _addon.name     = 'xicamera'
-_addon.version  = '0.7.8'
+_addon.version  = '0.7.10'
 
 require 'common'
 
@@ -11,10 +11,12 @@ local default_config =
 {
     distance    = 6,
 	battleDistance = 8.2,
+	battleRange = 4.0,
 	horizontalPanSpeed = 3.0,
 	verticalPanSpeed = 10.7,
 	saveOnIncrement = false,
 	autoCalcVertSpeed = true,
+	battleRangeLocked = true,
 }
 local configs = default_config
 ----------------------------------------------------------------------------------------------------
@@ -46,6 +48,12 @@ local jittersSig
 local newJitterPtr
 local originalJitterPtr
 
+local battleCamRangeSig
+local newBattleCamRangePtr
+local originalBattleCamRangePtr
+local battleCamRangeLockLocation
+local originalBattleRangeLockValues
+
 local setHorizontalPanSpeed = function(newSpeed)
 	configs.horizontalPanSpeed = newSpeed 
 	ashita.memory.write_float(horizontalPanSpeedPtr, newSpeed / 100.0)
@@ -70,6 +78,21 @@ local setBattleCameraDistance = function(newDistance)
 	configs.battleDistance = newDistance
 	ashita.memory.write_float(minBattleDistancePtr, newDistance - (originalMaxBattleDistance - originalMinBattleDistance))
 	ashita.memory.write_float(maxBattleDistancePtr, newDistance)
+end
+
+function setBattleCameraRange(newRange)
+	configs.battleRange = newRange
+	ashita.memory.write_float(newBattleCamRangePtr, newRange)
+end
+
+function setBattleRangeLock(isLocked)
+	configs.battleRangeLocked = isLocked
+
+	if configs.battleRangeLocked then
+		ashita.memory.write_uint16(battleCamRangeLockLocation, originalBattleRangeLockValues) -- { fld1 (D9E8) }
+	else
+		ashita.memory.write_uint16(battleCamRangeLockLocation, 0x9090)
+	end
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -169,6 +192,19 @@ ashita.register_event('load', function()
 	
 	ashita.memory.write_uint32(jittersSig + 0x0F, newJitterPtr)
 	ashita.memory.write_uint32(jittersSig + 0x1F, newJitterPtr)
+
+	-- Battle Camera Range
+	battleCamRangeSig = ashita.memory.findpattern('FFXiMain.dll', 0, 'D8C9D99C24DC000000DDD8D9442450D8442428D83D', 0, 0)
+	if (battleCamRangeSig == 0) then error('Failed to locate battleCamRangeSig!') end
+	
+	originalBattleCamRangePtr = ashita.memory.read_uint32(battleCamRangeSig + 0x15)	
+	newBattleCamRangePtr = ashita.memory.alloc(4)
+	ashita.memory.write_float(newBattleCamRangePtr, ashita.memory.read_float(originalBattleCamRangePtr)) -- write the original value to new memloc
+	ashita.memory.write_uint32(battleCamRangeSig + 0x15, newBattleCamRangePtr)
+	
+	-- find battle range lock and save original values
+	battleCamRangeLockLocation = battleCamRangeSig + 0x19
+	originalBattleRangeLockValues = ashita.memory.read_uint16(battleCamRangeLockLocation)
 	
 	-- SET CAMERA DISTANCE BASED ON configs
 	setCameraDistance(configs.distance)
@@ -183,6 +219,9 @@ ashita.register_event('load', function()
 	if not configs.autoCalcVertSpeed then
 		setVerticalPanSpeed(configs.verticalPanSpeed)
 	end
+
+	setBattleCameraRange(configs.battleRange)
+	setBattleRangeLock(configs.battleRangeLocked)
 end)
 
 ashita.register_event('command', function(command, ntype)
@@ -217,6 +256,28 @@ ashita.register_event('command', function(command, ntype)
                 ashita.settings.save(_addon.path .. '/settings/settings.json', configs)
                 print("Vertical pan speed changed to " .. newSpeed)
             end
+		elseif table.hasvalue({'brange', 'br'}, command_args[2]) then
+            if (tonumber(command_args[3])) then
+                local newRange = tonumber(command_args[3])
+				if newRange >= 0 and newRange <= 100 then
+					setBattleRangeLock(true)
+					setBattleCameraRange(newRange)
+					ashita.settings.save(_addon.path .. '/settings/settings.json', configs)
+					print("Battle camera range changed to " .. newRange)
+				else
+					print("New range must be between 0 and 100. Default is 4.")
+				end
+            end
+		elseif table.hasvalue({'rangelock', 'rl'}, command_args[2]) then
+			if table.hasvalue({'on', 'true' , '1'}, tostring(command_args[3])) then
+				setBattleRangeLock(true)
+				ashita.settings.save(_addon.path .. '/settings/settings.json', configs)
+				print("Battle camera range locked.")
+			elseif table.hasvalue({'off', 'false' , '0'}, tostring(command_args[3])) then
+				setBattleRangeLock(false)
+				ashita.settings.save(_addon.path .. '/settings/settings.json', configs)
+				print("Battle camera range unlocked.")
+			end
 		elseif table.hasvalue({'incr', 'in', 'bincr', 'bin', 'decr', 'de', 'bdecr', 'bde'}, command_args[2]) then
 			local isIncr = string.find(command_args[2], 'in')
 			local isBattle = string.find(command_args[2], 'b')
@@ -307,5 +368,14 @@ ashita.register_event('unload', function()
 		ashita.memory.write_uint32(jittersSig + 0x0F, originalJitterPtr)
 		ashita.memory.write_uint32(jittersSig + 0x1F, originalJitterPtr)
 		ashita.memory.dealloc(newJitterPtr, 4)
+	end
+	if (battleCamRangeSig ~= 0 and battleCamRangeSig ~= nil) then
+		ashita.memory.write_uint32(battleCamRangeSig + 0x15, originalBattleCamRangePtr)
+		ashita.memory.dealloc(newBattleCamRangePtr, 4)
+		
+		if originalBattleRangeLockValues ~= ashita.memory.read_uint16(battleCamRangeLockLocation) then
+			ashita.memory.unprotect(battleCamRangeLockLocation, 2)
+			ashita.memory.write_uint16(battleCamRangeLockLocation, originalBattleRangeLockValues) -- { fld1 (D9E8) }
+		end
 	end
 end)

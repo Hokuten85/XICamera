@@ -10,12 +10,14 @@ local settings = require('settings')
 -- Configurations
 ----------------------------------------------------------------------------------------------------
 local default_settings = T{
-    distance    = 6,
+    distance    = 6.0,
 	battleDistance = 8.2,
+	battleRange = 4.0,
 	horizontalPanSpeed = 3.0,
 	verticalPanSpeed = 10.7,
 	saveOnIncrement = false,
 	autoCalcVertSpeed = true,
+	battleRangeLocked = true,
 }
 local configs = settings.load(default_settings)
 
@@ -47,6 +49,12 @@ local oringinalVerticalPanSpeed
 local jittersSig
 local newJitterPtr
 local originalJitterPtr
+
+local battleCamRangeSig
+local newBattleCamRangePtr
+local originalBattleCamRangePtr
+local battleCamRangeLockLocation
+local originalBattleRangeLockValues
 
 --[[
 * Updates the addon settings.
@@ -96,6 +104,21 @@ function setBattleCameraDistance(newDistance)
 	ashita.memory.write_float(maxBattleDistancePtr, newDistance)
 end
 
+function setBattleCameraRange(newRange)
+	configs.battleRange = newRange
+	ashita.memory.write_float(newBattleCamRangePtr, newRange)
+end
+
+function setBattleRangeLock(isLocked)
+	configs.battleRangeLocked = isLocked
+
+	if configs.battleRangeLocked then
+		ashita.memory.write_uint16(battleCamRangeLockLocation, originalBattleRangeLockValues) -- { fld1 (D9E8) }
+	else
+		ashita.memory.write_uint16(battleCamRangeLockLocation, 0x9090)
+	end
+end
+
 function setDistances()
 	-- SET CAMERA DISTANCE BASED ON configs
 	setCameraDistance(configs.distance)
@@ -110,6 +133,9 @@ function setDistances()
 	if not configs.autoCalcVertSpeed then
 		setVerticalPanSpeed(configs.verticalPanSpeed)
 	end
+	
+	setBattleCameraRange(configs.battleRange)
+	setBattleRangeLock(configs.battleRangeLocked)
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -206,6 +232,19 @@ ashita.events.register('load', 'camera_load', function()
 	
 	ashita.memory.write_uint32(jittersSig + 0x0F, newJitterPtr)
 	ashita.memory.write_uint32(jittersSig + 0x1F, newJitterPtr)
+	
+	-- Battle Camera Range
+	battleCamRangeSig = ashita.memory.find('FFXiMain.dll', 0, 'D8C9D99C24DC000000DDD8D9442450D8442428D83D', 0, 0)
+	if (battleCamRangeSig == 0) then error('Failed to locate battleCamRangeSig!') end
+	
+	originalBattleCamRangePtr = ashita.memory.read_uint32(battleCamRangeSig + 0x15)	
+	newBattleCamRangePtr = ashita.memory.alloc(4)
+	ashita.memory.write_float(newBattleCamRangePtr, ashita.memory.read_float(originalBattleCamRangePtr)) -- write the original value to new memloc
+	ashita.memory.write_uint32(battleCamRangeSig + 0x15, newBattleCamRangePtr)
+	
+	-- find battle range lock and save original values
+	battleCamRangeLockLocation = battleCamRangeSig + 0x19
+	originalBattleRangeLockValues = ashita.memory.read_uint16(battleCamRangeLockLocation)
 		
 	setDistances()
 end)
@@ -217,31 +256,53 @@ ashita.events.register('command', 'camera_command', function(e)
             if (tonumber(command_args[3])) then
                 local newDistance = tonumber(command_args[3])
                 setCameraDistance(newDistance)
-                update_settings()
+				update_settings()
                 print("Distance changed to " .. newDistance)
             end
 		elseif table.contains({'battle', 'b'}, command_args[2]) then
             if (tonumber(command_args[3])) then
                 local newDistance = tonumber(command_args[3])
 				setBattleCameraDistance(newDistance)
-                update_settings()
+				update_settings()
                 print("Battle distance changed to " .. newDistance)
             end
 		elseif table.contains({'hspeed', 'hs'}, command_args[2]) then
             if (tonumber(command_args[3])) then
                 local newSpeed = tonumber(command_args[3])
 				setHorizontalPanSpeed(newSpeed)
-                update_settings()
+				update_settings()
                 print("Horizontal pan speed changed to " .. newSpeed)
             end
 		elseif table.contains({'vspeed', 'vs'}, command_args[2]) then
             if (tonumber(command_args[3])) then
                 local newSpeed = tonumber(command_args[3])
-				setVerticalPanSpeed(newSpeed)
 				configs.autoCalcVertSpeed = false
-                update_settings()
+				setVerticalPanSpeed(newSpeed)
+				update_settings()
                 print("Vertical pan speed changed to " .. newSpeed)
             end
+		elseif table.contains({'brange', 'br'}, command_args[2]) then
+            if (tonumber(command_args[3])) then
+                local newRange = tonumber(command_args[3])
+				if newRange >= 0 and newRange <= 100 then
+					setBattleRangeLock(true)
+					setBattleCameraRange(newRange)
+					update_settings()
+					print("Battle camera range changed to " .. newRange)
+				else
+					print("New range must be between 0 and 100. Default is 4.")
+				end
+            end
+		elseif table.contains({'rangelock', 'rl'}, command_args[2]) then
+			if table.contains({'on', 'true' , '1'}, tostring(command_args[3])) then
+				setBattleRangeLock(true)
+				update_settings()
+				print("Battle camera range locked.")
+			elseif table.contains({'off', 'false' , '0'}, tostring(command_args[3])) then
+				setBattleRangeLock(false)
+				update_settings()
+				print("Battle camera range unlocked.")
+			end
 		elseif table.contains({'incr', 'in', 'bincr', 'bin', 'decr', 'de', 'bdecr', 'bde'}, command_args[2]) then
 			local isIncr = string.find(command_args[2], 'in')
 			local isBattle = string.find(command_args[2], 'b')
@@ -261,8 +322,10 @@ ashita.events.register('command', 'camera_command', function(e)
         elseif table.contains({'help', 'h'}, command_args[2]) then
             print("Set Distance: </camera|/cam> <distance|d> <###> - FFXI Default: 6")
 			print("Set Battle Distance: </camera|/cam> <battle|b> <###> - FFXI Default 8")
+			print("Set Battle Camera Range: </camera|/cam> <brange|br> <###> - FFXI Default: 4, forces battle range lock on")
 			print("Set Horizontal Pan Speed: </camera|/cam> <hspeed|hs> <###> - FFXI Default 3")
 			print("Set Vertical Pan Speed: </camera|/cam> <vspeed|vs> <###> - FFXI Default: 10, forces auto calc off")
+			print("Unlock Battle Camera Range: </camera|/cam> <rangelock|rl> <on|true|1|off|false|0>")
 			print("Increments Distance: </camera|/cam> <incr|in>")
 			print("Decrements Distance: </camera|/cam> <de|decr>")
 			print("Increments Battle Distance: </camera|/cam> <bin|bincr>")
@@ -274,8 +337,10 @@ ashita.events.register('command', 'camera_command', function(e)
 			print("- status")
 			print("-  cameraDistance: " .. configs.distance)
 			print("-  battleDistance: " .. configs.battleDistance)
+			print("-  battleRange: " .. configs.battleRange)
 			print("-  horizontalPanSpeed: " .. configs.horizontalPanSpeed)
 			print("-  verticalPanSpeed: " .. configs.verticalPanSpeed)
+			print("-  battleRangeLocked: " .. tostring(configs.battleRangeLocked))
 			print("-  saveOnIncrement: " .. tostring(configs.saveOnIncrement))
 			print("-  autoCalcVertSpeed: " .. tostring(configs.autoCalcVertSpeed))
         end
@@ -323,6 +388,15 @@ local restorePointers = function()
 		ashita.memory.write_uint32(jittersSig + 0x0F, originalJitterPtr)
 		ashita.memory.write_uint32(jittersSig + 0x1F, originalJitterPtr)
 		ashita.memory.dealloc(newJitterPtr, 4)
+	end
+	if (battleCamRangeSig ~= 0 and battleCamRangeSig ~= nil) then
+		ashita.memory.write_uint32(battleCamRangeSig + 0x15, originalBattleCamRangePtr)
+		ashita.memory.dealloc(newBattleCamRangePtr, 4)
+		
+		if originalBattleRangeLockValues ~= ashita.memory.read_uint16(battleCamRangeLockLocation) then
+			ashita.memory.unprotect(battleCamRangeLockLocation, 2)
+			ashita.memory.write_uint16(battleCamRangeLockLocation, originalBattleRangeLockValues) -- { fld1 (D9E8) }
+		end
 	end
 end
 
