@@ -22,6 +22,10 @@ namespace XICamera
 		DWORD g_verticalPanAddress; // vertical pan address.
 		DWORD g_jitterSignature;
 		DWORD g_originalJitterAddress;
+		DWORD g_battleCamRangeAddress;
+		DWORD g_originalBattleCamRangeAddress;
+		DWORD g_battleCamRangeLockAddress;
+		WORD  g_originalRangeLockValues;
 
 		float g_OriginalMinDistance;
 		float g_OriginalMaxDistance;
@@ -31,6 +35,7 @@ namespace XICamera
 		float g_OriginalHorizontalPanSpeed;
 		float g_OriginalVerticalPanSpeed;
 		float g_newJitter = 1.0f;
+		float g_newBattleCamRange = 4.0f;
 
 		Camera& Camera::instance(void)
 		{
@@ -118,7 +123,7 @@ namespace XICamera
 				}
 				*(DWORD*)g_WalkAnimationAddress = (DWORD)&g_NewMinDistance;
 
-				
+
 				g_NPCWalkAnimationAddress = XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\x75\x14\xD9\x44\x24\x10\xD8\x0D\xFF\xFF\xFF\xFF\xD9\x1B\x8B\x8E", "xxxxxxxx????xxxx") + 0x08;
 				if (g_NPCWalkAnimationAddress == 0)
 				{
@@ -127,7 +132,7 @@ namespace XICamera
 				}
 				*(DWORD*)g_NPCWalkAnimationAddress = (DWORD)&g_NewMinDistance;
 
-				g_BattleSoundAddress = XICamera::functions::FindPattern("FFXiMain.dll",      (BYTE*)"\xD9\x5C\x24\x14\x74\x1B\x48\x74\x10\xD9\x44\x24\x10\xD8\x0D", "xxxxxxxxxxxxxxx") + 0x0F;
+				g_BattleSoundAddress = XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD9\x5C\x24\x14\x74\x1B\x48\x74\x10\xD9\x44\x24\x10\xD8\x0D", "xxxxxxxxxxxxxxx") + 0x0F;
 				if (g_BattleSoundAddress == 0)
 				{
 					removeCamera();
@@ -164,11 +169,25 @@ namespace XICamera
 				*(DWORD*)(g_jitterSignature + 0x0F) = (DWORD)&g_newJitter;
 				*(DWORD*)(g_jitterSignature + 0x1F) = (DWORD)&g_newJitter;
 
+				g_battleCamRangeAddress = XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD8\xC9\xD9\x9C\x24\xDC\x00\x00\x00\xDD\xD8\xD9\x44\x24\x50\xD8\x44\x24\x28\xD8\x3D", "xxxxxxxxxxxxxxxxxxxxx") + 0x15;
+				if (g_battleCamRangeAddress == 0)
+				{
+					removeCamera();
+					m_logger->logMessage(ILogProvider::LogLevel::Info, "could not find battle cam range signature");
+					return 0;
+				}
+				g_originalBattleCamRangeAddress = *(DWORD*)g_battleCamRangeAddress;
+				*(DWORD*)g_battleCamRangeAddress = (DWORD)&g_newBattleCamRange;
+
+				g_battleCamRangeLockAddress = g_battleCamRangeAddress + 0x04;
+				g_originalRangeLockValues = *(WORD*)g_battleCamRangeLockAddress;
 
 				setCameraDistance(m_cameraDistance);
 				setBattleDistance(m_battleDistance);
 				setHorizontalPanSpeed(m_horizontalPanSpeed);
 				setVerticalPanSpeed(m_verticalPanSpeed);
+				setBattleCameraRange(m_battleRange);
+				setBattleRangeLock(m_battleRangeLocked);
 
 				m_cameraSet = true;
 
@@ -203,7 +222,7 @@ namespace XICamera
 			{
 				DWORD dwProtect;
 				VirtualProtect((void*)g_MinBattleAddress, 4, PAGE_READWRITE, &dwProtect);
-				*(FLOAT*)(g_MinBattleAddress) = g_OriginalMinBattleDistance	;
+				*(FLOAT*)(g_MinBattleAddress) = g_OriginalMinBattleDistance;
 				VirtualProtect((void*)g_MinBattleAddress, 4, dwProtect, new DWORD);
 			}
 
@@ -253,6 +272,16 @@ namespace XICamera
 				*(DWORD*)(g_jitterSignature + 0x1F) = g_originalJitterAddress;
 			}
 
+			if (g_battleCamRangeAddress != 0)
+			{
+				*(DWORD*)(g_battleCamRangeAddress) = g_originalBattleCamRangeAddress;
+
+				if (g_originalRangeLockValues != *(WORD*)g_battleCamRangeLockAddress)
+				{
+					*(WORD*)g_battleCamRangeLockAddress = g_originalRangeLockValues;
+				}
+			}
+
 			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_cameraSet = %s", m_cameraSet ? "true" : "false");
 			return m_cameraSet;
 		}
@@ -263,7 +292,7 @@ namespace XICamera
 			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_logDebug = %s", state ? "Debug" : "Discard");
 		}
 
-		bool Camera::setCameraDistance(const int &newDistance)
+		bool Camera::setCameraDistance(const int& newDistance)
 		{
 			m_cameraDistance = newDistance;
 
@@ -345,6 +374,44 @@ namespace XICamera
 			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_verticalPanSpeed = '%d'", m_verticalPanSpeed);
 
 			return true;
+		}
+
+		bool Camera::setBattleCameraRange(const int& newRange)
+		{
+			if (newRange >= 0 && newRange <= 100)
+			{
+				m_battleRange = newRange;
+
+				if (g_newBattleCamRange != 0)
+				{
+					g_newBattleCamRange = m_battleRange * 1.0f;
+				}
+
+				m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_battleRange = '%d'", m_battleRange);
+
+				return true;
+			}
+		}
+
+		bool Camera::setBattleRangeLock(const bool& isLocked)
+		{
+			m_battleRangeLocked = isLocked;
+
+			if (g_battleCamRangeLockAddress != 0)
+			{
+				if (m_battleRangeLocked)
+				{
+					*(WORD*)g_battleCamRangeLockAddress = g_originalRangeLockValues;
+				}
+				else
+				{
+					*(WORD*)g_battleCamRangeLockAddress = 0x9090;
+				}
+
+				m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_battleRangeLocked = '%d'", m_battleRangeLocked);
+
+				return true;
+			}
 		}
 	}
 }

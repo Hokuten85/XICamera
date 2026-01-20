@@ -38,6 +38,12 @@ namespace XICamera
 			bool setVerticalPanSpeed(const int& newSpeed);
 			const int& verticalPanSpeed(void) const { return m_verticalPanSpeed; }
 
+			bool setBattleCameraRange(const int& newRange);
+			const int& battleRange(void) const { return m_battleRange; }
+
+			bool setBattleRangeLock(const bool& isLocked);
+			const bool& battleRangeLocked(void) const { return m_battleRangeLocked; }
+
 		public:
 			static Camera& instance(void);
 
@@ -52,6 +58,8 @@ namespace XICamera
 			int m_battleDistance;
 			int m_horizontalPanSpeed;
 			int m_verticalPanSpeed;
+			int m_battleRange;
+			bool m_battleRangeLocked;
 
 			ILogProvider::LogLevel m_logDebug;
 			ILogProvider* m_logger;

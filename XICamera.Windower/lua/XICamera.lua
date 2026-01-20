@@ -43,6 +43,8 @@ defaults = T{
 	verticalPanSpeed = 10.7,
 	saveOnIncrement = false,
 	autoCalcVertSpeed = true,
+	battleRange = 4.0,
+	battleRangeLocked = true,
 }
 
 settings = config.load(defaults)
@@ -62,6 +64,8 @@ windower.register_event('load', function()
 	else
 		_XICamera.set_vertical_pan_speed(settings.verticalPanSpeed)
 	end
+	_XICamera.set_battle_camera_range(settings.battleRange)
+	_XICamera.set_battle_range_lock(settings.battleRangeLocked)
     _XICamera.enable()
 end)
 
@@ -86,6 +90,8 @@ windower.register_event('addon command', function(command, ...)
         windower.add_to_chat(8, '   bde|bdecr - Decrement current battle camera distance by one')
 		windower.add_to_chat(8, '   saveOnIncrement|soi - Toggles Saving on increment/decrement behavior - default: off')
 		windower.add_to_chat(8, '   autoCalcVertSpeed|acv - Toggles Vertical pan speed autocalc - default: on')
+		windower.add_to_chat(8, '   brange|br # - Set Battle Camera Range: - default: 4, , min: 0, max: 100, forces battle range lock on')
+		windower.add_to_chat(8, '   battlelock|bl <on|true|1|off|false|0> - Unlock Battle Camera Range')
 
 	elseif table.contains(T{'distance', 'd'}, command) then
 		if not args[1] then
@@ -128,7 +134,7 @@ windower.register_event('addon command', function(command, ...)
             settings.horizontalPanSpeed = tonumber(args[1])
 			config.save(settings)
 		else
-			windower.add_to_chat(8, 'failed to horizontal pan speed "' .. args[1] .. '"')
+			windower.add_to_chat(8, 'failed to set horizontal pan speed "' .. args[1] .. '"')
 		end
 	elseif table.contains(T{'vspeed', 'vs'}, command) then
 		if not args[1] then
@@ -142,7 +148,7 @@ windower.register_event('addon command', function(command, ...)
 			settings.autoCalcVertSpeed = false
 			config.save(settings)
 		else
-			windower.add_to_chat(8, 'failed to vertical pan speed "' .. args[1] .. '"')
+			windower.add_to_chat(8, 'failed to set vertical pan speed "' .. args[1] .. '"')
 		end
 	elseif table.contains(T{'incr', 'in', 'bincr', 'bin', 'decr', 'de', 'bdecr', 'bde'}, command) then
 		local isIncr = string.find(command, 'in')
@@ -164,6 +170,31 @@ windower.register_event('addon command', function(command, ...)
 		settings.autoCalcVertSpeed = not settings.autoCalcVertSpeed
 		windower.add_to_chat(8, "autoCalcVertSpeed changed to " .. tostring(settings.autoCalcVertSpeed))
 		config.save(settings)
+	elseif table.contains({'brange', 'br'}, command) then
+		if (tonumber(args[1])) then
+		    local newRange = math.min(math.max(0, tonumber(args[1])), 100)
+
+			_XICamera.set_battle_range_lock(true)
+			if _XICamera.set_battle_camera_range(newRange) > 0 then
+				settings.battleRange = newRange
+				config.save(settings)
+				windower.add_to_chat(8, 'Battle camera range changed to "' .. newRange .. '"')
+			else
+				windower.add_to_chat(8, 'failed to set battle camera range "' .. newRange .. '"')
+			end
+		end
+	elseif table.contains({'battlelock', 'bl'}, command) then
+		if table.contains({'on', 'true' , '1'}, tostring(args[1])) then
+			_XICamera.set_battle_range_lock(true)
+			settings.battleRangeLocked = true
+			config.save(settings)
+			windower.add_to_chat(8, 'Battle camera range locked.')
+		elseif table.contains({'off', 'false' , '0'}, tostring(args[1])) then
+			_XICamera.set_battle_range_lock(false)
+			settings.battleRangeLocked = false
+			config.save(settings)
+			windower.add_to_chat(8, 'Battle camera range unlocked.')
+		end
 	elseif table.contains(T{'status', 's'}, command) then
 		local stats = _XICamera.status()
 		windower.add_to_chat(127,'- status')
@@ -173,5 +204,7 @@ windower.register_event('addon command', function(command, ...)
 		windower.add_to_chat(127, '-  verticalPanSpeed: ' .. stats['verticalPanSpeed'])
 		windower.add_to_chat(127, '-  saveOnIncrement: ' .. tostring(settings.saveOnIncrement))
 		windower.add_to_chat(127, '-  autoCalcVertSpeed: ' .. tostring(settings.autoCalcVertSpeed))
+		windower.add_to_chat(127, '-  battleRange: ' .. tostring(settings.battleRange))
+		windower.add_to_chat(127, '-  battleRangeLocked: ' .. tostring(settings.battleRangeLocked))
 	end
 end)

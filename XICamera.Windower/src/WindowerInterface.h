@@ -94,6 +94,20 @@ namespace XICamera
 			 */
 			static int lua_setVerticalPanSpeed(lua_State* L);
 
+			/* internally calls Camera::setBattleCameraRange
+			 *
+			 * arguments: [1] - int: newRange
+			 * returns: a boolean representing the operation result
+			 */
+			static int lua_setBattleCameraRange(lua_State* L);
+
+			/* internally calls Camera::setBattleRangeLock
+			 *
+			 * arguments: [1] - bool: isLocked
+			 * returns: a boolean representing the operation result
+			 */
+			static int lua_setBattleRangeLock(lua_State* L);
+
 			/* collects some of the internal data of the Camera
 			 *
 			 * arguments: none

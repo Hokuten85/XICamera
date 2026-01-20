@@ -105,8 +105,8 @@ function setBattleCameraDistance(newDistance)
 end
 
 function setBattleCameraRange(newRange)
-	configs.battleRange = newRange
-	ashita.memory.write_float(newBattleCamRangePtr, newRange)
+	configs.battleRange = math.min(math.max(0, tonumber(newRange)), 100)
+	ashita.memory.write_float(newBattleCamRangePtr, configs.battleRange)
 end
 
 function setBattleRangeLock(isLocked)
@@ -283,17 +283,13 @@ ashita.events.register('command', 'camera_command', function(e)
             end
 		elseif table.contains({'brange', 'br'}, command_args[2]) then
             if (tonumber(command_args[3])) then
-                local newRange = tonumber(command_args[3])
-				if newRange >= 0 and newRange <= 100 then
-					setBattleRangeLock(true)
-					setBattleCameraRange(newRange)
-					update_settings()
-					print("Battle camera range changed to " .. newRange)
-				else
-					print("New range must be between 0 and 100. Default is 4.")
-				end
+                local newRange = math.min(math.max(0, tonumber(command_args[3])), 100)
+				setBattleRangeLock(true)
+				setBattleCameraRange(newRange)
+				update_settings()
+				print("Battle camera range changed to " .. newRange)
             end
-		elseif table.contains({'rangelock', 'rl'}, command_args[2]) then
+		elseif table.contains({'battlelock', 'bl'}, command_args[2]) then
 			if table.contains({'on', 'true' , '1'}, tostring(command_args[3])) then
 				setBattleRangeLock(true)
 				update_settings()
@@ -322,10 +318,10 @@ ashita.events.register('command', 'camera_command', function(e)
         elseif table.contains({'help', 'h'}, command_args[2]) then
             print("Set Distance: </camera|/cam> <distance|d> <###> - FFXI Default: 6")
 			print("Set Battle Distance: </camera|/cam> <battle|b> <###> - FFXI Default 8")
-			print("Set Battle Camera Range: </camera|/cam> <brange|br> <###> - FFXI Default: 4, forces battle range lock on")
+			print("Set Battle Camera Range: </camera|/cam> <brange|br> <###> - FFXI Default: 4, min: 0, max: 100, forces battle range lock on")
 			print("Set Horizontal Pan Speed: </camera|/cam> <hspeed|hs> <###> - FFXI Default 3")
 			print("Set Vertical Pan Speed: </camera|/cam> <vspeed|vs> <###> - FFXI Default: 10, forces auto calc off")
-			print("Unlock Battle Camera Range: </camera|/cam> <rangelock|rl> <on|true|1|off|false|0>")
+			print("Unlock Battle Camera Range: </camera|/cam> <battlelock|bl> <on|true|1|off|false|0>")
 			print("Increments Distance: </camera|/cam> <incr|in>")
 			print("Decrements Distance: </camera|/cam> <de|decr>")
 			print("Increments Battle Distance: </camera|/cam> <bin|bincr>")
@@ -394,7 +390,6 @@ local restorePointers = function()
 		ashita.memory.dealloc(newBattleCamRangePtr, 4)
 		
 		if originalBattleRangeLockValues ~= ashita.memory.read_uint16(battleCamRangeLockLocation) then
-			ashita.memory.unprotect(battleCamRangeLockLocation, 2)
 			ashita.memory.write_uint16(battleCamRangeLockLocation, originalBattleRangeLockValues) -- { fld1 (D9E8) }
 		end
 	end

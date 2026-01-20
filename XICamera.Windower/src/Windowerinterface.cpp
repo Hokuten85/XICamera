@@ -40,6 +40,8 @@ namespace XICamera
 			{ "set_battle_distance"  , WindowerInterface::lua_setBattleDistance },
 			{ "set_horizontal_pan_speed"  , WindowerInterface::lua_setHorizontalPanSpeed },
 			{ "set_vertical_pan_speed"  , WindowerInterface::lua_setVerticalPanSpeed },
+			{ "set_battle_camera_range"  , WindowerInterface::lua_setBattleCameraRange },
+			{ "set_battle_range_lock"  , WindowerInterface::lua_setBattleRangeLock },
 
 			{ "status"    , WindowerInterface::lua_getStatus },
 
@@ -118,6 +120,34 @@ namespace XICamera
 		return 1;
 	}
 
+	int WindowerInterface::lua_setBattleCameraRange(lua_State* L)
+	{
+		if (lua_gettop(L) != 1 || !lua_isnumber(L, 1))
+		{
+			lua_pushstring(L, "a valid range argument is required");
+			lua_error(L);
+		}
+
+		instance().setBattleCameraRange(lua_tonumber(L, 1));
+
+		lua_pushnumber(L, instance().battleRange());
+		return 1;
+	}
+
+	int WindowerInterface::lua_setBattleRangeLock(lua_State* L)
+	{
+		if (lua_gettop(L) != 1 || !lua_isboolean(L, 1))
+		{
+			lua_pushstring(L, "a valid bool argument is required");
+			lua_error(L);
+		}
+
+		instance().setBattleRangeLock(lua_toboolean(L, 1));
+
+		lua_pushboolean(L, instance().battleRangeLocked());
+		return 1;
+	}
+
 	int WindowerInterface::lua_getStatus(lua_State* L)
 	{
 		/* push a table to hold the diagnostics as a whole */
@@ -137,6 +167,12 @@ namespace XICamera
 
 		lua_pushnumber(L, instance().verticalPanSpeed());
 		lua_setfield(L, -2, "verticalPanSpeed");
+
+		lua_pushnumber(L, instance().battleRange());
+		lua_setfield(L, -2, "battleRange");
+
+		lua_pushnumber(L, instance().battleRangeLocked());
+		lua_setfield(L, -2, "battleRangeLocked");
 
 		return 1;
 	}
