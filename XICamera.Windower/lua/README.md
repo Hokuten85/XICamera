@@ -27,18 +27,20 @@ settings.xml:
 XICamera makes the in-game command `//camera` or `//cam` available to adjust camera distance on the fly.
 The following parameters are supported:
 
-- d/distance #          -- will change the camera distance - default: 6
-- b/battle #            -- will change the battle camera distance - default: 8
-- hs/hspeed #           -- will change the horizontal panning speed - default: 3
-- vs/vspeed #           -- will change the vertical panning speed - default: 10, this forces auto calc off
-- in/incr		        -- will increment camera distance by 1
-- de/decr		        -- will decrement camera distance by 1
-- bin/bincr		        -- will increment battle camera distance by 1
-- bde/bdecr		        -- will decrement battle camera distance by 1
-- saveOnIncrement/soi   -- will toggle saving behavior on incr/decr - default: off
-- autoCalcVertSpeed/acv -- Toggles Vertical pan speed autocalc - default: on
-- h/help                -- print help text
-- s/status              -- print status
+- d/distance #           -- will change the camera distance - default: 6
+- b/battle #             -- will change the battle camera distance - default: 8
+- hs/hspeed #            -- will change the horizontal panning speed - default: 3
+- vs/vspeed #            -- will change the vertical panning speed - default: 10, this forces auto calc off
+- in/incr		         -- will increment camera distance by 1
+- de/decr		         -- will decrement camera distance by 1
+- bin/bincr		         -- will increment battle camera distance by 1
+- bde/bdecr		         -- will decrement battle camera distance by 1
+- saveOnIncrement/soi    -- will toggle saving behavior on incr/decr - default: off
+- autoCalcVertSpeed/acv  -- Toggles Vertical pan speed autocalc - default: on
+- brange/br #            -- changes the battle camera movement range up to about 180 degrees around mob. default: 4, min: 0, max: 100.
+- battlelock/bl <on/off> -- allows battle camera to rotate 360 degrees around mob.
+- h/help                 -- print help text
+- s/status               -- print status
 
 These commands all support a short version (d/b/h/s/hs/vs).
 Changes made with distance will be reflected in `settings.xml`.
