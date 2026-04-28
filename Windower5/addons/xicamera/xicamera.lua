@@ -115,11 +115,17 @@ local state = {
     originalMinDistanceSlotValue = nil,  -- whatever pointer those slots held originally
     newMinDistanceConstant = nil,        -- our float* override
 
-    -- Jitter: two slots inside one function, both swapped to point at
-    -- `newJitter = 1.0` to defeat the 0.125 jitter multiplier.
+    -- Jitter: two related proximity-push damping sites in sub_1001ED90.
+    -- Site #2 (horizontal x/z arm) has two FMUL slots reading +0.125;
+    -- we redirect both at `newJitter = 1.0`. Site #1 (vertical arm)
+    -- has one FMUL slot reading -0.125; we redirect at `newJitterNeg
+    -- = -1.0`. See docs/JITTER_INVESTIGATION.md.
     jitterMatch          = nil,
     originalJitterPtr    = nil,
     newJitter            = nil,
+    jitterPush1Match     = nil,
+    originalJitterPush1Ptr = nil,
+    newJitterNeg         = nil,
 
     -- Battle camera range: pointer-rewrite + a 2-byte clamp at +0x04
     -- that we NOP-out (0x9090) when the user requests "unlock".
@@ -219,11 +225,11 @@ local function scan_setup()
         (npc_walk_slot and npc_walk_slot[0]) or
         (sound_slot and sound_slot[0])
 
-    -- Jitter override: 1.0 cancels the 0.125 collision-response damping.
+    -- Jitter override site #2 (horizontal x/z arm): +1.0 instead of +0.125.
     -- See docs/JITTER_INVESTIGATION.md.
     local jitter_match = ffi_cast('uint8_t*', scanner.scan('8D54242C8D44242CD8C9525550'))
     if jitter_match == nil then
-        add_text('[xicamera] WARN: jitter signature not found; collision-response damping unchanged')
+        add_text('[xicamera] WARN: jitter signature (push #2) not found; horizontal-axis damping unchanged')
     else
         state.jitterMatch = jitter_match
         state.newJitter   = alloc_float(1.0)
@@ -232,6 +238,19 @@ local function scan_setup()
         state.originalJitterPtr = j0[0]
         j0[0] = state.newJitter
         j1[0] = state.newJitter
+    end
+
+    -- Jitter override site #1 (vertical/single-axis arm): -1.0 instead of -0.125.
+    local jitter_push1_match = ffi_cast('uint8_t*', scanner.scan('D8642410518D44242CD80D&????????D91C24'))
+    if jitter_push1_match == nil then
+        add_text('[xicamera] WARN: jitter signature (push #1) not found; vertical-axis damping unchanged')
+    else
+        -- scanner.scan with `&` returns the operand address directly.
+        state.jitterPush1Match = jitter_push1_match
+        state.newJitterNeg     = alloc_float(-1.0)
+        local slot = ffi_cast('float**', jitter_push1_match)
+        state.originalJitterPush1Ptr = slot[0]
+        slot[0] = state.newJitterNeg
     end
 
     -- Battle camera range: float* at +0x15, plus a 2-byte clamp at +0x19
@@ -330,6 +349,10 @@ local function restorePointers()
         local j1 = ffi_cast('float**', state.jitterMatch + 0x1F)
         j0[0] = state.originalJitterPtr
         j1[0] = state.originalJitterPtr
+    end
+    if state.jitterPush1Match then
+        local slot = ffi_cast('float**', state.jitterPush1Match)
+        slot[0] = state.originalJitterPush1Ptr
     end
 
     if state.battleRangeSlot then

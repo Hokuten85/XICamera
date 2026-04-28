@@ -38,10 +38,16 @@ DWORD g_WalkAnimationAddress     = 0;
 DWORD g_NPCWalkAnimationAddress  = 0;
 DWORD g_BattleSoundAddress       = 0;
 
-// Jitter (collision-response damping) site. The signature scan returns the
-// match-start address; the operand rewrites are at +0x0F and +0x1F.
+// Jitter (collision-response damping) site #2 — horizontal x/z arm. The
+// signature scan returns the match-start address; the operand rewrites
+// are at +0x0F and +0x1F. See docs/JITTER_INVESTIGATION.md.
 DWORD g_jitterMatchAddress       = 0;
 DWORD g_originalJitterPtr        = 0;
+
+// Jitter site #1 — vertical/single-axis arm. Same proximity-push family
+// inside sub_1001ED90 but uses -0.125 (negative) and a single FMUL.
+DWORD g_jitterPush1MatchAddress  = 0;
+DWORD g_originalJitterPush1Ptr   = 0;
 
 // Battle camera range: same shape — match start at the signature, slot
 // operand at +0x15, 2-byte clamp at +0x19.
@@ -60,7 +66,8 @@ float g_OriginalVerticalPanSpeed   = 0.0f;
 
 // Our overrides — game reads these via the rewritten pointers.
 float g_NewMinDistance     = 0.0f;
-float g_newJitter          = 1.0f;
+float g_newJitter          = 1.0f;   // for site #2 (positive); was 0.125
+float g_newJitterNeg       = -1.0f;  // for site #1 (negative); was -0.125
 float g_newBattleCamRange  = 4.0f;
 
 // ---------------------------------------------------------------------------
@@ -244,15 +251,31 @@ bool Camera::initCamera() {
         writeDword(g_BattleSoundAddress, reinterpret_cast<DWORD>(&g_NewMinDistance));
 
     // ---- jitter / collision-response damping --------------------------
+    // Site #2: horizontal x/z proximity push. Two FMUL operands at
+    // +0x0F and +0x1F both load the +0.125 damping rate; we redirect
+    // both at our +1.0 override so the lerp completes in one frame.
     g_jitterMatchAddress = findIn(s_client,
         (const uint8_t*)"\x8D\x54\x24\x2C\x8D\x44\x24\x2C\xD8\xC9\x52\x55\x50",
         "xxxxxxxxxxxxx");
     if (g_jitterMatchAddress == 0) {
-        Logf(m_logger, LogLevel::Warn, "jitter signature not found");
+        Logf(m_logger, LogLevel::Warn, "jitter signature (push #2) not found");
     } else {
         g_originalJitterPtr = *reinterpret_cast<DWORD*>(g_jitterMatchAddress + 0x0F);
         writeDword(g_jitterMatchAddress + 0x0F, reinterpret_cast<DWORD>(&g_newJitter));
         writeDword(g_jitterMatchAddress + 0x1F, reinterpret_cast<DWORD>(&g_newJitter));
+    }
+
+    // Site #1: vertical/single-axis proximity push. One FMUL operand at
+    // +0x0B reads the -0.125 damping rate; we redirect at our -1.0
+    // override so this arm also completes in one frame.
+    g_jitterPush1MatchAddress = findIn(s_client,
+        (const uint8_t*)"\xD8\x64\x24\x10\x51\x8D\x44\x24\x2C\xD8\x0D\xFF\xFF\xFF\xFF\xD9\x1C\x24",
+        "xxxxxxxxxxx????xxx");
+    if (g_jitterPush1MatchAddress == 0) {
+        Logf(m_logger, LogLevel::Warn, "jitter signature (push #1) not found");
+    } else {
+        g_originalJitterPush1Ptr = *reinterpret_cast<DWORD*>(g_jitterPush1MatchAddress + 0x0B);
+        writeDword(g_jitterPush1MatchAddress + 0x0B, reinterpret_cast<DWORD>(&g_newJitterNeg));
     }
 
     // ---- battle camera range + lock -----------------------------------
@@ -300,6 +323,9 @@ bool Camera::removeCamera() {
     if (g_jitterMatchAddress) {
         writeDword(g_jitterMatchAddress + 0x0F, g_originalJitterPtr);
         writeDword(g_jitterMatchAddress + 0x1F, g_originalJitterPtr);
+    }
+    if (g_jitterPush1MatchAddress) {
+        writeDword(g_jitterPush1MatchAddress + 0x0B, g_originalJitterPush1Ptr);
     }
 
     if (g_battleCamRangeSlotAddress) {

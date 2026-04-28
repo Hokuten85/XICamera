@@ -49,8 +49,9 @@ matched site.
 | 8 | walk animation       | `0F 85 ?? ?? ?? ?? D8 0D ?? ?? ?? ?? D9 13 D8 1D`                        | float* pointer-rewrite    | +0x08 |
 | 9 | NPC walk animation   | `75 14 D9 44 24 10 D8 0D ?? ?? ?? ?? D9 1B 8B 8E`                        | float* pointer-rewrite    | +0x08 |
 |10 | battle sound calc    | `D9 5C 24 14 74 1B 48 74 10 D9 44 24 10 D8 0D`                           | float* pointer-rewrite    | +0x0F |
-|11 | jitter function      | `8D 54 24 2C 8D 44 24 2C D8 C9 52 55 50`                                 | float* pointer-rewrite × 2 | +0x0F, +0x1F |
+|11 | jitter (push #2, x/z arm) | `8D 54 24 2C 8D 44 24 2C D8 C9 52 55 50`                            | float* pointer-rewrite × 2 | +0x0F, +0x1F |
 |12 | battle camera range  | `D8 C9 D9 9C 24 DC 00 00 00 DD D8 D9 44 24 50 D8 44 24 28 D8 3D`         | float* pointer-rewrite + 2-byte NOP patch | +0x15, +0x19 |
+|13 | jitter (push #1, vertical arm) | `D8 64 24 10 51 8D 44 24 2C D8 0D ?? ?? ?? ?? D9 1C 24`         | float* pointer-rewrite | +0x0B |
 
 ### How the float* pointer-rewrites work
 
@@ -71,11 +72,10 @@ when walls force the camera close to the player. See
 [`JITTER_INVESTIGATION.md`](JITTER_INVESTIGATION.md) for the full
 disassembly.
 
-> **Coverage gap:** signature 11 only covers two of the four damping
-> readers in `sub_1001ED90`. A negative-damping arm (single-axis
-> push at `VA 0x1001FCD5`) is currently unpatched; vertical-axis
-> wall collisions can still oscillate. Signature for that site is
-> drafted in `JITTER_INVESTIGATION.md` § "Recommendation."
+> Signatures 11 and 13 together cover both proximity-push damping
+> arms (horizontal x/z and vertical/single-axis). The other two
+> 0.125 readers in `sub_1001ED90` are unrelated math; see
+> `JITTER_INVESTIGATION.md`.
 
 ### How the battle range lock patch works
 

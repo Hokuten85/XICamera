@@ -167,16 +167,19 @@ correction. No multi-frame lerp → no oscillation.
 | Is the signature inside the right function?      | **Yes** — `sub_1001ED90`, the camera task per-frame. |
 | Are the two patched FMUL operand sites correct?  | **Yes** — these are exactly the x/z components of the horizontal proximity push (push #2). |
 | Is the chosen replacement value (1.0) correct?   | **Reasonable** — it converts a slow lerp into a single-frame snap, which empirically eliminates oscillation. |
-| Does the patch fully cover the proximity-push behavior? | **No** — push #1 (the single-axis push at `VA 0x1001FCD5`) is still active at the stock 0.125 rate. Vertical-axis collisions can still oscillate. |
+| Does the patch fully cover the proximity-push behavior? | **Yes (since signature 13 was added)** — both push #1 and push #2 are now redirected. |
 | Is there a "better" patch site than the current one? | **No** for push #2 specifically — the two `D8 0D` operands at `+0x0F` / `+0x1F` are exactly the per-component scalars and replacing them is the cleanest possible intervention. |
 
-## Recommendation: extend the patch to cover push #1
+## Implemented: extended the patch to cover push #1
 
-Add a second signature for push #1 at VA `0x1001FCD5` and apply the
-same pointer-rewrite trick. This makes the proximity-buffer fix
-comprehensive without changing the existing patch site.
+A second signature for push #1 was added (signature 13 in
+`CAMERA_PATCH_TARGETS.md`). The operand at match+0x0B is redirected
+to a new `-1.0` constant, making the vertical/single-axis arm also
+complete in one frame. All four launcher implementations carry this
+patch; the C++ side allocates `g_newJitterNeg = -1.0f` next to the
+existing `g_newJitter = 1.0f`.
 
-### Proposed signature for push #1
+### Push #1 signature (verified in retail April 2026)
 
 The push #1 disassembly has a unique 13-byte run starting at
 VA `0x1001FCC6` (or longer if we want more context):

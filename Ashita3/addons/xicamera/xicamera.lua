@@ -48,6 +48,10 @@ local jittersSig
 local newJitterPtr
 local originalJitterPtr
 
+local jittersPush1Sig
+local newJitterNegPtr
+local originalJitterPush1Ptr
+
 local battleCamRangeSig
 local newBattleCamRangePtr
 local originalBattleCamRangePtr
@@ -181,17 +185,29 @@ ashita.register_event('load', function()
 	verticalPanSpeedPtr = ashita.memory.read_uint32(vPanSpeedSig + 0x0A)
 	originalVerticalPanSpeed = ashita.memory.read_float(verticalPanSpeedPtr)
 
-	-- Camera jitters
+	-- Camera jitters site #2 (horizontal x/z proximity push, scalar 0.125)
 	jittersSig = ashita.memory.findpattern('FFXiMain.dll', 0, '8D54242C8D44242CD8C9525550', 0, 0)
 	if (jittersSig == 0) then print('[xicamera] WARN: jittersSig signature not found; subsequent features will be skipped'); return end
-	
+
 	newJitterPtr = ashita.memory.alloc(4)
-    ashita.memory.write_float(newJitterPtr, 1.0) -- 1.0 eliminates the 0.125 multiplier that shrinks the camera distance
-	
+    ashita.memory.write_float(newJitterPtr, 1.0) -- one-frame snap instead of 0.125 lerp
+
 	originalJitterPtr = ashita.memory.read_uint32(jittersSig + 0x0F)
-	
+
 	ashita.memory.write_uint32(jittersSig + 0x0F, newJitterPtr)
 	ashita.memory.write_uint32(jittersSig + 0x1F, newJitterPtr)
+
+	-- Camera jitters site #1 (vertical/single-axis proximity push, scalar -0.125)
+	-- See docs/JITTER_INVESTIGATION.md.
+	jittersPush1Sig = ashita.memory.findpattern('FFXiMain.dll', 0, 'D8642410518D44242CD80D????????D91C24', 0, 0)
+	if (jittersPush1Sig == 0) then
+		print('[xicamera] WARN: jittersPush1Sig signature not found; vertical-axis jitter still active')
+	else
+		newJitterNegPtr = ashita.memory.alloc(4)
+		ashita.memory.write_float(newJitterNegPtr, -1.0) -- one-frame snap instead of -0.125 lerp
+		originalJitterPush1Ptr = ashita.memory.read_uint32(jittersPush1Sig + 0x0B)
+		ashita.memory.write_uint32(jittersPush1Sig + 0x0B, newJitterNegPtr)
+	end
 
 	-- Battle Camera Range
 	battleCamRangeSig = ashita.memory.findpattern('FFXiMain.dll', 0, 'D8C9D99C24DC000000DDD8D9442450D8442428D83D', 0, 0)
@@ -405,6 +421,12 @@ ashita.register_event('unload', function()
 		ashita.memory.write_uint32(jittersSig + 0x0F, originalJitterPtr)
 		ashita.memory.write_uint32(jittersSig + 0x1F, originalJitterPtr)
 		ashita.memory.dealloc(newJitterPtr, 4)
+	end
+	if (jittersPush1Sig ~= nil and jittersPush1Sig ~= 0) then
+		ashita.memory.write_uint32(jittersPush1Sig + 0x0B, originalJitterPush1Ptr)
+		if newJitterNegPtr ~= nil then
+			ashita.memory.dealloc(newJitterNegPtr, 4)
+		end
 	end
 	if (battleCamRangeSig ~= 0 and battleCamRangeSig ~= nil) then
 		ashita.memory.write_uint32(battleCamRangeSig + 0x15, originalBattleCamRangePtr)
