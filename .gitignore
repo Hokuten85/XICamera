@@ -364,3 +364,4 @@ _jitter_analysis_run.txt
 
 # Claude Code agent state
 /.claude/
+_camera_features_run.txt
