@@ -19,14 +19,15 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="functions.cpp" />
-    <ClCompile Include="LogProvider.cpp" />
     <ClCompile Include="Camera.cpp" />
+    <ClCompile Include="FFXiClient.cpp" />
+    <ClCompile Include="PatternScanner.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="functions.h" />
-    <ClInclude Include="LogProvider.h" />
     <ClInclude Include="Camera.h" />
+    <ClInclude Include="FFXiClient.h" />
+    <ClInclude Include="Logger.hpp" />
+    <ClInclude Include="PatternScanner.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
