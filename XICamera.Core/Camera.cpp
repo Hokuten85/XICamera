@@ -1,7 +1,5 @@
 #include "Camera.h"
 #include <rpc.h>
-#include <cctype>
-#include <algorithm>
 #include "functions.h"
 
 namespace XICamera
@@ -202,53 +200,21 @@ namespace XICamera
 		{
 			m_cameraSet = false;
 
-			if (g_MinCameraAddress != 0)
+			auto restoreFloat = [](DWORD addr, float value)
 			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_MinCameraAddress, 4, PAGE_READWRITE, &dwProtect);
-				*(FLOAT*)(g_MinCameraAddress) = g_OriginalMinDistance;
-				VirtualProtect((void*)g_MinCameraAddress, 4, dwProtect, new DWORD);
-			}
+				if (addr == 0) return;
+				DWORD dwOldProtect, dwTemp;
+				VirtualProtect((void*)addr, 4, PAGE_READWRITE, &dwOldProtect);
+				*(FLOAT*)(addr) = value;
+				VirtualProtect((void*)addr, 4, dwOldProtect, &dwTemp);
+			};
 
-			if (g_MaxCameraAddress != 0)
-			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_MaxCameraAddress, 4, PAGE_READWRITE, &dwProtect);
-				*(FLOAT*)(g_MaxCameraAddress) = g_OriginalMaxDistance;
-				VirtualProtect((void*)g_MaxCameraAddress, 4, dwProtect, new DWORD);
-			}
-
-			if (g_MinBattleAddress != 0)
-			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_MinBattleAddress, 4, PAGE_READWRITE, &dwProtect);
-				*(FLOAT*)(g_MinBattleAddress) = g_OriginalMinBattleDistance;
-				VirtualProtect((void*)g_MinBattleAddress, 4, dwProtect, new DWORD);
-			}
-
-			if (g_MaxBattleAddress != 0)
-			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_MaxBattleAddress, 4, PAGE_READWRITE, &dwProtect);
-				*(FLOAT*)(g_MaxBattleAddress) = g_OriginalMaxBattleDistance;
-				VirtualProtect((void*)g_MaxBattleAddress, 4, dwProtect, new DWORD);
-			}
-
-			if (g_horizontalPanAddress != 0)
-			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_horizontalPanAddress, 4, PAGE_READWRITE, &dwProtect);
-				*(FLOAT*)(g_horizontalPanAddress) = g_OriginalHorizontalPanSpeed;
-				VirtualProtect((void*)g_horizontalPanAddress, 4, dwProtect, new DWORD);
-			}
-
-			if (g_verticalPanAddress != 0)
-			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_verticalPanAddress, 4, PAGE_READWRITE, &dwProtect);
-				*(FLOAT*)(g_verticalPanAddress) = g_OriginalVerticalPanSpeed;
-				VirtualProtect((void*)g_verticalPanAddress, 4, dwProtect, new DWORD);
-			}
+			restoreFloat(g_MinCameraAddress,    g_OriginalMinDistance);
+			restoreFloat(g_MaxCameraAddress,    g_OriginalMaxDistance);
+			restoreFloat(g_MinBattleAddress,    g_OriginalMinBattleDistance);
+			restoreFloat(g_MaxBattleAddress,    g_OriginalMaxBattleDistance);
+			restoreFloat(g_horizontalPanAddress, g_OriginalHorizontalPanSpeed);
+			restoreFloat(g_verticalPanAddress,   g_OriginalVerticalPanSpeed);
 
 			if (g_ZoomOnZoneInSetupAddress != 0)
 			{
@@ -298,18 +264,18 @@ namespace XICamera
 
 			if (g_MinCameraAddress != 0)
 			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_MinCameraAddress, 4, PAGE_READWRITE, &dwProtect);
+				DWORD dwOldProtect, dwTemp;
+				VirtualProtect((void*)g_MinCameraAddress, 4, PAGE_READWRITE, &dwOldProtect);
 				*(FLOAT*)(g_MinCameraAddress) = m_cameraDistance - (g_OriginalMaxDistance - g_OriginalMinDistance);
-				VirtualProtect((void*)g_MinCameraAddress, 4, dwProtect, new DWORD);
+				VirtualProtect((void*)g_MinCameraAddress, 4, dwOldProtect, &dwTemp);
 			}
 
 			if (g_MaxCameraAddress != 0)
 			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_MaxCameraAddress, 4, PAGE_READWRITE, &dwProtect);
+				DWORD dwOldProtect, dwTemp;
+				VirtualProtect((void*)g_MaxCameraAddress, 4, PAGE_READWRITE, &dwOldProtect);
 				*(FLOAT*)(g_MaxCameraAddress) = m_cameraDistance;
-				VirtualProtect((void*)g_MaxCameraAddress, 4, dwProtect, new DWORD);
+				VirtualProtect((void*)g_MaxCameraAddress, 4, dwOldProtect, &dwTemp);
 			}
 
 			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_cameraDistance = '%d'", m_cameraDistance);
@@ -323,18 +289,18 @@ namespace XICamera
 
 			if (g_MinBattleAddress != 0)
 			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_MinBattleAddress, 4, PAGE_READWRITE, &dwProtect);
-				*(FLOAT*)(g_MinBattleAddress) = m_battleDistance - (g_OriginalMinBattleDistance - g_OriginalMinBattleDistance);
-				VirtualProtect((void*)g_MinBattleAddress, 4, dwProtect, new DWORD);
+				DWORD dwOldProtect, dwTemp;
+				VirtualProtect((void*)g_MinBattleAddress, 4, PAGE_READWRITE, &dwOldProtect);
+				*(FLOAT*)(g_MinBattleAddress) = m_battleDistance - (g_OriginalMaxBattleDistance - g_OriginalMinBattleDistance);
+				VirtualProtect((void*)g_MinBattleAddress, 4, dwOldProtect, &dwTemp);
 			}
 
 			if (g_MaxBattleAddress != 0)
 			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_MaxBattleAddress, 4, PAGE_READWRITE, &dwProtect);
+				DWORD dwOldProtect, dwTemp;
+				VirtualProtect((void*)g_MaxBattleAddress, 4, PAGE_READWRITE, &dwOldProtect);
 				*(FLOAT*)(g_MaxBattleAddress) = m_battleDistance;
-				VirtualProtect((void*)g_MaxBattleAddress, 4, dwProtect, new DWORD);
+				VirtualProtect((void*)g_MaxBattleAddress, 4, dwOldProtect, &dwTemp);
 			}
 
 			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_battleDistance = '%d'", m_battleDistance);
@@ -348,10 +314,10 @@ namespace XICamera
 
 			if (g_horizontalPanAddress != 0)
 			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_horizontalPanAddress, 4, PAGE_READWRITE, &dwProtect);
-				*(FLOAT*)(g_horizontalPanAddress) = m_horizontalPanSpeed / 100.0;
-				VirtualProtect((void*)g_horizontalPanAddress, 4, dwProtect, new DWORD);
+				DWORD dwOldProtect, dwTemp;
+				VirtualProtect((void*)g_horizontalPanAddress, 4, PAGE_READWRITE, &dwOldProtect);
+				*(FLOAT*)(g_horizontalPanAddress) = m_horizontalPanSpeed / 100.0f;
+				VirtualProtect((void*)g_horizontalPanAddress, 4, dwOldProtect, &dwTemp);
 			}
 
 			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_horizontalPanSpeed = '%d'", m_horizontalPanSpeed);
@@ -365,10 +331,10 @@ namespace XICamera
 
 			if (g_verticalPanAddress != 0)
 			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_verticalPanAddress, 4, PAGE_READWRITE, &dwProtect);
-				*(FLOAT*)(g_verticalPanAddress) = m_verticalPanSpeed / 100.0;
-				VirtualProtect((void*)g_verticalPanAddress, 4, dwProtect, new DWORD);
+				DWORD dwOldProtect, dwTemp;
+				VirtualProtect((void*)g_verticalPanAddress, 4, PAGE_READWRITE, &dwOldProtect);
+				*(FLOAT*)(g_verticalPanAddress) = m_verticalPanSpeed / 100.0f;
+				VirtualProtect((void*)g_verticalPanAddress, 4, dwOldProtect, &dwTemp);
 			}
 
 			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_verticalPanSpeed = '%d'", m_verticalPanSpeed);
@@ -378,40 +344,38 @@ namespace XICamera
 
 		bool Camera::setBattleCameraRange(const int& newRange)
 		{
-			if (newRange >= 0 && newRange <= 100)
+			if (newRange < 0 || newRange > 100)
 			{
-				m_battleRange = newRange;
-
-				if (g_newBattleCamRange != 0)
-				{
-					g_newBattleCamRange = m_battleRange * 1.0f;
-				}
-
-				m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_battleRange = '%d'", m_battleRange);
-
-				return true;
+				return false;
 			}
+
+			m_battleRange = newRange;
+			g_newBattleCamRange = m_battleRange * 1.0f;
+
+			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_battleRange = '%d'", m_battleRange);
+			return true;
 		}
 
 		bool Camera::setBattleRangeLock(const bool& isLocked)
 		{
 			m_battleRangeLocked = isLocked;
 
-			if (g_battleCamRangeLockAddress != 0)
+			if (g_battleCamRangeLockAddress == 0)
 			{
-				if (m_battleRangeLocked)
-				{
-					*(WORD*)g_battleCamRangeLockAddress = g_originalRangeLockValues;
-				}
-				else
-				{
-					*(WORD*)g_battleCamRangeLockAddress = 0x9090;
-				}
-
-				m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_battleRangeLocked = '%d'", m_battleRangeLocked);
-
-				return true;
+				return false;
 			}
+
+			if (m_battleRangeLocked)
+			{
+				*(WORD*)g_battleCamRangeLockAddress = g_originalRangeLockValues;
+			}
+			else
+			{
+				*(WORD*)g_battleCamRangeLockAddress = 0x9090;
+			}
+
+			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_battleRangeLocked = '%d'", m_battleRangeLocked);
+			return true;
 		}
 	}
 }

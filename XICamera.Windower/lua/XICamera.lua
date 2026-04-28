@@ -1,5 +1,5 @@
 --[[
- 	Copyright © 2019, Hokuten
+ 	Copyright ï¿½ 2019, Hokuten
  	All rights reserved.
  
  	Redistribution and use in source and binary forms, with or without
@@ -79,10 +79,14 @@ windower.register_event('addon command', function(command, ...)
 
 	if table.contains(T{'help', 'h'}, command)  then
 		windower.add_to_chat(8, _addon.name .. ' v.' .. _addon.version)
-		windower.add_to_chat(8, '   d|distance # - sets the camera distance - default: 6')
-		windower.add_to_chat(8, '   b|battle # - sets the camera distance - default: 8')
-		windower.add_to_chat(8, '   hs|hspeed # - sets the horizontal pan speed - default: 3')
-		windower.add_to_chat(8, '   vs|vspeed # - sets the vertical pan - default: 10, forces auto calc off')
+		windower.add_to_chat(8, '   d|distance # - sets the camera distance - default: ' .. defaults.cameraDistance)
+		windower.add_to_chat(8, '   dm|dmult <ratio> - multiply stock distance by ratio (1.0 = stock)')
+		windower.add_to_chat(8, '   b|battle # - sets the battle camera distance - default: ' .. defaults.battleDistance)
+		windower.add_to_chat(8, '   bm|bmult <ratio> - multiply stock battle distance by ratio')
+		windower.add_to_chat(8, '   hs|hspeed # - sets the horizontal pan speed - default: ' .. defaults.horizontalPanSpeed)
+		windower.add_to_chat(8, '   hsm|hsmult <ratio> - multiply stock horizontal pan by ratio')
+		windower.add_to_chat(8, '   vs|vspeed # - sets the vertical pan - default: ' .. defaults.verticalPanSpeed .. ', forces auto calc off')
+		windower.add_to_chat(8, '   vsm|vsmult <ratio> - multiply stock vertical pan, forces auto calc off')
 		windower.add_to_chat(8, '   s|status - Print status and diagnostic info')
 		windower.add_to_chat(8, '   in|incr - Increment current camera distance by one')
         windower.add_to_chat(8, '   de|decr - Decrement current camera distance by one')
@@ -123,6 +127,37 @@ windower.register_event('addon command', function(command, ...)
 		else
 			windower.add_to_chat(8, 'failed to change battle distance "' .. args[1] .. '"')
 		end
+	elseif table.contains(T{'dmult', 'dm'}, command) then
+		if not args[1] or not tonumber(args[1]) then
+			error('Invalid syntax: //camera dmult <ratio>')
+			return
+		end
+		local mult = tonumber(args[1])
+		local newDistance = defaults.cameraDistance * mult
+		if _XICamera.set_camera_distance(newDistance) > 0 then
+			settings.cameraDistance = newDistance
+			config.save(settings)
+			windower.add_to_chat(8, string.format('Distance changed to %.3f (%.2fx stock %.1f)', newDistance, mult, defaults.cameraDistance))
+			if settings.autoCalcVertSpeed then
+				_XICamera.set_vertical_pan_speed(defaults.verticalPanSpeed * settings.cameraDistance / 6)
+			end
+		else
+			windower.add_to_chat(8, 'failed to change distance')
+		end
+	elseif table.contains(T{'bmult', 'bm'}, command) then
+		if not args[1] or not tonumber(args[1]) then
+			error('Invalid syntax: //camera bmult <ratio>')
+			return
+		end
+		local mult = tonumber(args[1])
+		local newDistance = defaults.battleDistance * mult
+		if _XICamera.set_battle_distance(newDistance) > 0 then
+			settings.battleDistance = newDistance
+			config.save(settings)
+			windower.add_to_chat(8, string.format('Battle distance changed to %.3f (%.2fx stock %.1f)', newDistance, mult, defaults.battleDistance))
+		else
+			windower.add_to_chat(8, 'failed to change battle distance')
+		end
 	elseif table.contains(T{'hspeed', 'hs'}, command) then
 		if not args[1] then
 			error('Invalid syntax: //camera hspeed <number>')
@@ -149,6 +184,35 @@ windower.register_event('addon command', function(command, ...)
 			config.save(settings)
 		else
 			windower.add_to_chat(8, 'failed to set vertical pan speed "' .. args[1] .. '"')
+		end
+	elseif table.contains(T{'hsmult', 'hsm'}, command) then
+		if not args[1] or not tonumber(args[1]) then
+			error('Invalid syntax: //camera hsmult <ratio>')
+			return
+		end
+		local mult = tonumber(args[1])
+		local newSpeed = defaults.horizontalPanSpeed * mult
+		if _XICamera.set_horizontal_pan_speed(newSpeed) > 0 then
+			settings.horizontalPanSpeed = newSpeed
+			config.save(settings)
+			windower.add_to_chat(8, string.format('Horizontal pan speed changed to %.3f (%.2fx stock %.1f)', newSpeed, mult, defaults.horizontalPanSpeed))
+		else
+			windower.add_to_chat(8, 'failed to set horizontal pan speed')
+		end
+	elseif table.contains(T{'vsmult', 'vsm'}, command) then
+		if not args[1] or not tonumber(args[1]) then
+			error('Invalid syntax: //camera vsmult <ratio>')
+			return
+		end
+		local mult = tonumber(args[1])
+		local newSpeed = defaults.verticalPanSpeed * mult
+		if _XICamera.set_vertical_pan_speed(newSpeed) > 0 then
+			settings.verticalPanSpeed = newSpeed
+			settings.autoCalcVertSpeed = false
+			config.save(settings)
+			windower.add_to_chat(8, string.format('Vertical pan speed changed to %.3f (%.2fx stock %.1f, autoCalc off)', newSpeed, mult, defaults.verticalPanSpeed))
+		else
+			windower.add_to_chat(8, 'failed to set vertical pan speed')
 		end
 	elseif table.contains(T{'incr', 'in', 'bincr', 'bin', 'decr', 'de', 'bdecr', 'bde'}, command) then
 		local isIncr = string.find(command, 'in')

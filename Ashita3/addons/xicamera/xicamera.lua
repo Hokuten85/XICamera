@@ -40,9 +40,9 @@ local originalMinDistancePtr
 local newMinDistanceConstant
 
 local horizontalPanSpeedPtr
-local oringinalHorizontalPanSpeed
+local originalHorizontalPanSpeed
 local verticalPanSpeedPtr
-local oringinalVerticalPanSpeed
+local originalVerticalPanSpeed
 
 local jittersSig
 local newJitterPtr
@@ -105,7 +105,7 @@ ashita.register_event('load', function()
 	
 	--GET MIN CAMERA DISTANCE
 	local minDistanceSig = ashita.memory.findpattern('FFXiMain.dll', 0, 'D8C9D9C0D8C1D9C2D80D????????D9C3DCC0D8EB', 0, 0)
-	if (minDistanceSig == 0) then error('Failed to locate minDistanceSig!') end
+	if (minDistanceSig == 0) then print('[xicamera] WARN: minDistanceSig signature not found; subsequent features will be skipped'); return end
 	
 	minDistancePtr = ashita.memory.read_uint32(minDistanceSig + 0x0A)
 	originalMinDistance = ashita.memory.read_float(minDistancePtr)
@@ -113,7 +113,7 @@ ashita.register_event('load', function()
 	
 	--GET MAX CAMERA DISTANCE
 	local maxDistanceSig = ashita.memory.findpattern('FFXiMain.dll', 0, 'D9442410D825????????51D80D', 0, 0)
-	if (maxDistanceSig == 0) then error('Failed to locate maxDistanceSig!') end
+	if (maxDistanceSig == 0) then print('[xicamera] WARN: maxDistanceSig signature not found; subsequent features will be skipped'); return end
 	
 	maxDistancePtr = ashita.memory.read_uint32(maxDistanceSig + 0x06)
 	originalMaxDistance = ashita.memory.read_float(maxDistancePtr)
@@ -121,7 +121,7 @@ ashita.register_event('load', function()
 	
 	-- GET MIN BATTLE DISTANCE
 	local minBattleDistanceSig = ashita.memory.findpattern('FFXiMain.dll', 0, '5152D8442424D905????????D8C1', 0, 0)
-	if (minBattleDistanceSig == 0) then error('Failed to locate minBattleDistanceSig!') end
+	if (minBattleDistanceSig == 0) then print('[xicamera] WARN: minBattleDistanceSig signature not found; subsequent features will be skipped'); return end
 	
 	minBattleDistancePtr = ashita.memory.read_uint32(minBattleDistanceSig + 0x08)
 	originalMinBattleDistance = ashita.memory.read_float(minBattleDistancePtr)
@@ -129,7 +129,7 @@ ashita.register_event('load', function()
 	
 	-- GET MAX BATTLE DISTANCE
 	local battleMaxDistanceSig = ashita.memory.findpattern('FFXiMain.dll', 0, 'D8C1D8CAD95C2450D805????????D8C9', 0, 0)
-	if (battleMaxDistanceSig == 0) then error('Failed to locate battleMaxDistanceSig!') end
+	if (battleMaxDistanceSig == 0) then print('[xicamera] WARN: battleMaxDistanceSig signature not found; subsequent features will be skipped'); return end
 	
 	maxBattleDistancePtr = ashita.memory.read_uint32(battleMaxDistanceSig + 0x0A)
 	originalMaxBattleDistance = ashita.memory.read_float(maxBattleDistancePtr)
@@ -137,7 +137,7 @@ ashita.register_event('load', function()
 	
 	-- GET LOCATION OF ZOOM LENSE SETUP
 	zoomSetupSig = ashita.memory.findpattern('FFXiMain.dll', 0, '85C0741AD9442404D80D????????D80D????????D87C', 0, 0)
-	if (zoomSetupSig == 0) then error('Failed to locate zoomSetupSig!') end
+	if (zoomSetupSig == 0) then print('[xicamera] WARN: zoomSetupSig signature not found; subsequent features will be skipped'); return end
 	
 	originalMinDistancePtr = ashita.memory.read_uint32(zoomSetupSig + 0x10)
 	newMinDistanceConstant = ashita.memory.alloc(4)
@@ -148,42 +148,42 @@ ashita.register_event('load', function()
 	
 	-- GET LOCATION OF WALK ANIMATION
 	walkAnimationSig = ashita.memory.findpattern('FFXiMain.dll', 0, '0F85????????D80D????????D913D81D', 0, 0)
-	if (walkAnimationSig == 0) then error('Failed to locate walkAnimationSig!') end
+	if (walkAnimationSig == 0) then print('[xicamera] WARN: walkAnimationSig signature not found; subsequent features will be skipped'); return end
 	
 	-- Write new memloc to walk animation
 	ashita.memory.write_uint32(walkAnimationSig + 0x08, newMinDistanceConstant)
 	
 	-- GET LOCATION OF NPC WALK ANIMATION
 	npcWalkAnimationSig = ashita.memory.findpattern('FFXiMain.dll', 0, '7514D9442410D80D????????D91B8B8E', 0, 0)
-	if (npcWalkAnimationSig == 0) then error('Failed to locate npcWalkAnimationSig!') end
+	if (npcWalkAnimationSig == 0) then print('[xicamera] WARN: npcWalkAnimationSig signature not found; subsequent features will be skipped'); return end
 	
 	-- Write new memloc to npc walk animation
 	ashita.memory.write_uint32(npcWalkAnimationSig + 0x08, newMinDistanceConstant)
 	
 	-- GET LOCATION OF BATTLE SOUND CALCULATION
 	battleSoundSig = ashita.memory.findpattern('FFXiMain.dll', 0, 'D95C2414741B487410D9442410D80D', 0, 0)
-	if (battleSoundSig == 0) then error('Failed to locate battleSoundSig!') end
+	if (battleSoundSig == 0) then print('[xicamera] WARN: battleSoundSig signature not found; subsequent features will be skipped'); return end
 	
 	-- Write new memloc to npc walk animation
 	ashita.memory.write_uint32(battleSoundSig + 0x0F, newMinDistanceConstant)
 	
 	--Horizontal Cam Pan Speed
 	local hPanSpeedSig = ashita.memory.findpattern('FFXiMain.dll', 0, 'D84C24208B068BCED80D', 0, 0)
-	if (hPanSpeedSig == 0) then error('Failed to locate hPanSpeedSig!') end
+	if (hPanSpeedSig == 0) then print('[xicamera] WARN: hPanSpeedSig signature not found; subsequent features will be skipped'); return end
 	
 	horizontalPanSpeedPtr = ashita.memory.read_uint32(hPanSpeedSig + 0x0A)
-	oringinalHorizontalPanSpeed = ashita.memory.read_float(horizontalPanSpeedPtr)
+	originalHorizontalPanSpeed = ashita.memory.read_float(horizontalPanSpeedPtr)
 	
 	--Vertical Cam Pan Speed
 	local vPanSpeedSig = ashita.memory.findpattern('FFXiMain.dll', 0, 'D84C24248B168BCED80D', 0, 0)
-	if (vPanSpeedSig == 0) then error('Failed to locate vPanSpeedSig!') end
+	if (vPanSpeedSig == 0) then print('[xicamera] WARN: vPanSpeedSig signature not found; subsequent features will be skipped'); return end
 	
 	verticalPanSpeedPtr = ashita.memory.read_uint32(vPanSpeedSig + 0x0A)
-	oringinalVerticalPanSpeed = ashita.memory.read_float(verticalPanSpeedPtr)
+	originalVerticalPanSpeed = ashita.memory.read_float(verticalPanSpeedPtr)
 
 	-- Camera jitters
 	jittersSig = ashita.memory.findpattern('FFXiMain.dll', 0, '8D54242C8D44242CD8C9525550', 0, 0)
-	if (jittersSig == 0) then error('Failed to locate jittersSig!') end
+	if (jittersSig == 0) then print('[xicamera] WARN: jittersSig signature not found; subsequent features will be skipped'); return end
 	
 	newJitterPtr = ashita.memory.alloc(4)
     ashita.memory.write_float(newJitterPtr, 1.0) -- 1.0 eliminates the 0.125 multiplier that shrinks the camera distance
@@ -195,7 +195,7 @@ ashita.register_event('load', function()
 
 	-- Battle Camera Range
 	battleCamRangeSig = ashita.memory.findpattern('FFXiMain.dll', 0, 'D8C9D99C24DC000000DDD8D9442450D8442428D83D', 0, 0)
-	if (battleCamRangeSig == 0) then error('Failed to locate battleCamRangeSig!') end
+	if (battleCamRangeSig == 0) then print('[xicamera] WARN: battleCamRangeSig signature not found; subsequent features will be skipped'); return end
 	
 	originalBattleCamRangePtr = ashita.memory.read_uint32(battleCamRangeSig + 0x15)	
 	newBattleCamRangePtr = ashita.memory.alloc(4)
@@ -241,6 +241,22 @@ ashita.register_event('command', function(command, ntype)
                 ashita.settings.save(_addon.path .. '/settings/settings.json', configs)
                 print("Battle distance changed to " .. newDistance)
             end
+		elseif table.hasvalue({'dmult', 'dm'}, command_args[2]) then
+            if (tonumber(command_args[3])) then
+                local mult = tonumber(command_args[3])
+                local newDistance = default_config.distance * mult
+                setCameraDistance(newDistance)
+                ashita.settings.save(_addon.path .. '/settings/settings.json', configs)
+                print(string.format("Distance changed to %.3f (%.2fx stock %.1f)", newDistance, mult, default_config.distance))
+            end
+		elseif table.hasvalue({'bmult', 'bm'}, command_args[2]) then
+            if (tonumber(command_args[3])) then
+                local mult = tonumber(command_args[3])
+                local newDistance = default_config.battleDistance * mult
+                setBattleCameraDistance(newDistance)
+                ashita.settings.save(_addon.path .. '/settings/settings.json', configs)
+                print(string.format("Battle distance changed to %.3f (%.2fx stock %.1f)", newDistance, mult, default_config.battleDistance))
+            end
 		elseif table.hasvalue({'hspeed', 'hs'}, command_args[2]) then
             if (tonumber(command_args[3])) then
                 local newSpeed = tonumber(command_args[3])
@@ -255,6 +271,23 @@ ashita.register_event('command', function(command, ntype)
 				configs.autoCalcVertSpeed = false
                 ashita.settings.save(_addon.path .. '/settings/settings.json', configs)
                 print("Vertical pan speed changed to " .. newSpeed)
+            end
+		elseif table.hasvalue({'hsmult', 'hsm'}, command_args[2]) then
+            if (tonumber(command_args[3])) then
+                local mult = tonumber(command_args[3])
+                local newSpeed = default_config.horizontalPanSpeed * mult
+                setHorizontalPanSpeed(newSpeed)
+                ashita.settings.save(_addon.path .. '/settings/settings.json', configs)
+                print(string.format("Horizontal pan speed changed to %.3f (%.2fx stock %.1f)", newSpeed, mult, default_config.horizontalPanSpeed))
+            end
+		elseif table.hasvalue({'vsmult', 'vsm'}, command_args[2]) then
+            if (tonumber(command_args[3])) then
+                local mult = tonumber(command_args[3])
+                local newSpeed = default_config.verticalPanSpeed * mult
+                configs.autoCalcVertSpeed = false
+                setVerticalPanSpeed(newSpeed)
+                ashita.settings.save(_addon.path .. '/settings/settings.json', configs)
+                print(string.format("Vertical pan speed changed to %.3f (%.2fx stock %.1f, autoCalc off)", newSpeed, mult, default_config.verticalPanSpeed))
             end
 		elseif table.hasvalue({'brange', 'br'}, command_args[2]) then
             if (tonumber(command_args[3])) then
@@ -292,10 +325,14 @@ ashita.register_event('command', function(command, ntype)
 			ashita.settings.save(_addon.path .. '/settings/settings.json', configs)
         elseif table.hasvalue({'help', 'h'}, command_args[2]) then
             print("Set Distance: </camera|/cam> <distance|d> <###> - FFXI Default: 6")
+            print("Multiply Distance: </camera|/cam> <dmult|dm> <ratio> - 1.0 = stock " .. default_config.distance)
 			print("Set Battle Distance: </camera|/cam> <battle|b> <###> - FFXI Default: 8")
+            print("Multiply Battle Distance: </camera|/cam> <bmult|bm> <ratio> - 1.0 = stock " .. default_config.battleDistance)
 			print("Set Battle Camera Range: </camera|/cam> <brange|br> <###> - FFXI Default: 4, min: 0, max: 100, forces battle range lock on")
 			print("Set Horizontal Pan Speed: </camera|/cam> <hspeed|hs> <###> - FFXI Default: 3")
+            print("Multiply Horizontal Pan: </camera|/cam> <hsmult|hsm> <ratio> - 1.0 = stock " .. default_config.horizontalPanSpeed)
 			print("Set Vertical Pan Speed: </camera|/cam> <vspeed|vs> <###> - FFXI Default: 10, forces auto calc off")
+            print("Multiply Vertical Pan: </camera|/cam> <vsmult|vsm> <ratio> - 1.0 = stock " .. default_config.verticalPanSpeed .. ", forces auto calc off")
 			print("Unlock Battle Camera Range: </camera|/cam> <battlelock|bl> <on|true|1|off|false|0>")
 			print("Increments Distance: </camera|/cam> <incr|in>")
 			print("Decrements Distance: </camera|/cam> <de|decr>")
@@ -342,10 +379,10 @@ ashita.register_event('unload', function()
 	end
 	
 	if (horizontalPanSpeedPtr ~= 0 and horizontalPanSpeedPtr ~= nil) then
-		ashita.memory.write_float(horizontalPanSpeedPtr, oringinalHorizontalPanSpeed)
+		ashita.memory.write_float(horizontalPanSpeedPtr, originalHorizontalPanSpeed)
 	end
 	if (verticalPanSpeedPtr ~= 0 and verticalPanSpeedPtr ~= nil) then
-		ashita.memory.write_float(verticalPanSpeedPtr, oringinalVerticalPanSpeed)
+		ashita.memory.write_float(verticalPanSpeedPtr, originalVerticalPanSpeed)
 	end
 	
 	if (zoomSetupSig ~= 0 and zoomSetupSig ~= nil) then

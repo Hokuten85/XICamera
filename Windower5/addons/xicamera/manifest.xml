@@ -1,15 +1,16 @@
 <package>
   <name>xicamera</name>
-  <version>0.7.6</version>
+  <version>0.7.10</version>
   <type>addon</type>
   <dependencies>
     <dependency>settings</dependency>
     <dependency>math</dependency>
-    <dependency>account</dependency>
     <dependency>string</dependency>
-    <dependency>player</dependency>
     <dependency>struct</dependency>
     <dependency>memory</dependency>
-    <dependency>enumerable</dependency>
+    <dependency>core.scanner</dependency>
+    <dependency>core.command</dependency>
+    <dependency>core.chat</dependency>
+    <dependency>win32</dependency>
   </dependencies>
 </package>
