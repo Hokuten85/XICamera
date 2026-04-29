@@ -12,6 +12,7 @@ local settings = require('settings')
 local default_settings = T{
     distance    = 6.0,
 	battleDistance = 8.2,
+	battleScale = 1.37,         -- cam b X writes (X * battleScale) to memory; tune so cam b X feels like cam d X
 	battleRange = 4.0,
 	horizontalPanSpeed = 3.0,
 	verticalPanSpeed = 10.7,
@@ -103,9 +104,15 @@ function setCameraDistance(newDistance)
 end
 
 function setBattleCameraDistance(newDistance)
+	-- Stash the USER-FACING value (so increment/decrement and persistence
+	-- operate in the same units the user typed), then write the scaled
+	-- value to memory. battleScale exists because user-input X in the
+	-- battle camera doesn't produce the same perceived distance from
+	-- focal as user-input X in the regular camera; the scale corrects.
 	configs.battleDistance = newDistance
-	ashita.memory.write_float(minBattleDistancePtr, newDistance - (originalMaxBattleDistance - originalMinBattleDistance))
-	ashita.memory.write_float(maxBattleDistancePtr, newDistance)
+	local effective = newDistance * (configs.battleScale or 1.0)
+	ashita.memory.write_float(minBattleDistancePtr, effective - (originalMaxBattleDistance - originalMinBattleDistance))
+	ashita.memory.write_float(maxBattleDistancePtr, effective)
 end
 
 function setBattleCameraRange(newRange)
@@ -282,22 +289,6 @@ ashita.events.register('command', 'camera_command', function(e)
 				update_settings()
                 print("Battle distance changed to " .. newDistance)
             end
-		elseif table.contains({'dmult', 'dm'}, command_args[2]) then
-            if (tonumber(command_args[3])) then
-                local mult = tonumber(command_args[3])
-                local newDistance = default_settings.distance * mult
-                setCameraDistance(newDistance)
-                update_settings()
-                print(string.format("Distance changed to %.3f (%.2fx stock %.1f)", newDistance, mult, default_settings.distance))
-            end
-		elseif table.contains({'bmult', 'bm'}, command_args[2]) then
-            if (tonumber(command_args[3])) then
-                local mult = tonumber(command_args[3])
-                local newDistance = default_settings.battleDistance * mult
-                setBattleCameraDistance(newDistance)
-                update_settings()
-                print(string.format("Battle distance changed to %.3f (%.2fx stock %.1f)", newDistance, mult, default_settings.battleDistance))
-            end
 		elseif table.contains({'hspeed', 'hs'}, command_args[2]) then
             if (tonumber(command_args[3])) then
                 local newSpeed = tonumber(command_args[3])
@@ -313,22 +304,13 @@ ashita.events.register('command', 'camera_command', function(e)
 				update_settings()
                 print("Vertical pan speed changed to " .. newSpeed)
             end
-		elseif table.contains({'hsmult', 'hsm'}, command_args[2]) then
+		elseif table.contains({'bscale'}, command_args[2]) then
             if (tonumber(command_args[3])) then
-                local mult = tonumber(command_args[3])
-                local newSpeed = default_settings.horizontalPanSpeed * mult
-                setHorizontalPanSpeed(newSpeed)
+                local newScale = tonumber(command_args[3])
+                configs.battleScale = newScale
+                setBattleCameraDistance(configs.battleDistance)  -- re-apply with new scale
                 update_settings()
-                print(string.format("Horizontal pan speed changed to %.3f (%.2fx stock %.1f)", newSpeed, mult, default_settings.horizontalPanSpeed))
-            end
-		elseif table.contains({'vsmult', 'vsm'}, command_args[2]) then
-            if (tonumber(command_args[3])) then
-                local mult = tonumber(command_args[3])
-                local newSpeed = default_settings.verticalPanSpeed * mult
-                configs.autoCalcVertSpeed = false
-                setVerticalPanSpeed(newSpeed)
-                update_settings()
-                print(string.format("Vertical pan speed changed to %.3f (%.2fx stock %.1f, autoCalc off)", newSpeed, mult, default_settings.verticalPanSpeed))
+                print(string.format("Battle scale changed to %.3f (cam b %g now writes %.2f)", newScale, configs.battleDistance, configs.battleDistance * newScale))
             end
 		elseif table.contains({'brange', 'br'}, command_args[2]) then
             if (tonumber(command_args[3])) then
@@ -366,14 +348,11 @@ ashita.events.register('command', 'camera_command', function(e)
 			update_settings()
         elseif table.contains({'help', 'h'}, command_args[2]) then
             print("Set Distance: </camera|/cam> <distance|d> <###> - FFXI Default: 6")
-            print("Multiply Distance: </camera|/cam> <dmult|dm> <ratio> - 1.0 = stock " .. default_settings.distance)
 			print("Set Battle Distance: </camera|/cam> <battle|b> <###> - FFXI Default 8")
-            print("Multiply Battle Distance: </camera|/cam> <bmult|bm> <ratio> - 1.0 = stock " .. default_settings.battleDistance)
+            print(string.format("Set Battle Scale: </camera|/cam> bscale <ratio> - default 1.37; current %.3f", configs.battleScale or 1.0))
 			print("Set Battle Camera Range: </camera|/cam> <brange|br> <###> - FFXI Default: 4, min: 0, max: 100, forces battle range lock on")
 			print("Set Horizontal Pan Speed: </camera|/cam> <hspeed|hs> <###> - FFXI Default 3")
-            print("Multiply Horizontal Pan: </camera|/cam> <hsmult|hsm> <ratio> - 1.0 = stock " .. default_settings.horizontalPanSpeed)
 			print("Set Vertical Pan Speed: </camera|/cam> <vspeed|vs> <###> - FFXI Default: 10, forces auto calc off")
-            print("Multiply Vertical Pan: </camera|/cam> <vsmult|vsm> <ratio> - 1.0 = stock " .. default_settings.verticalPanSpeed .. ", forces auto calc off")
 			print("Unlock Battle Camera Range: </camera|/cam> <battlelock|bl> <on|true|1|off|false|0>")
 			print("Increments Distance: </camera|/cam> <incr|in>")
 			print("Decrements Distance: </camera|/cam> <de|decr>")
@@ -385,7 +364,7 @@ ashita.events.register('command', 'camera_command', function(e)
 		elseif table.contains({'status', 's'}, command_args[2]) then
 			print("- status")
 			print("-  cameraDistance: " .. configs.distance)
-			print("-  battleDistance: " .. configs.battleDistance)
+			print(string.format("-  battleDistance: %g (effective %.2f at scale %.3f)", configs.battleDistance, configs.battleDistance * (configs.battleScale or 1.0), configs.battleScale or 1.0))
 			print("-  battleRange: " .. configs.battleRange)
 			print("-  horizontalPanSpeed: " .. configs.horizontalPanSpeed)
 			print("-  verticalPanSpeed: " .. configs.verticalPanSpeed)

@@ -39,6 +39,7 @@ camera obeys you instead of stock SE defaults.
 /camera status                      # multi-line dump of current values
 /camera d|distance <n>              # set camera distance (default 6)
 /camera b|battle <n>                # set battle camera distance (default 8.2)
+/camera bscale <n>                  # battle distance scale; cam b X writes X * bscale to memory
 /camera hs|hspeed <n>               # set horizontal pan speed (default 3)
 /camera vs|vspeed <n>               # set vertical pan speed; forces autoCalc OFF
 /camera br|brange <0-100>           # battle camera range; forces lock ON
@@ -49,6 +50,13 @@ camera obeys you instead of stock SE defaults.
 /camera acv|autoCalcVertSpeed       # toggle vertical pan auto-rescaling
 /camera h|help                      # one-line hint per command
 ```
+
+`bscale` exists because the battle camera's effective distance from
+its focal point doesn't track the raw value the way the regular
+camera does — at the same numeric input, the battle camera tends to
+feel closer. The default scale (1.37) matches the stock 8.2/6.0
+ratio between the two modes; tune higher if `cam b N` still feels
+closer than `cam d N` for you.
 
 `/cam`, `/xicamera`, and `/xicam` are accepted as aliases of
 `/camera` on every launcher. Settings persist via the launcher's

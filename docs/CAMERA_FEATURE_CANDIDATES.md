@@ -1,246 +1,208 @@
 # Camera Feature Candidates — Investigation Notes
 
-> **Status:** research notes, no code changes yet. This document
-> identifies candidate patch sites for proposed XICamera features
-> based on a static analysis of `sub_1001ED90` (the camera-task
-> per-frame method) **plus** historical pre-v0.7 work (commit
-> [`e3b2a98b`](https://github.com/Hokuten85/XICamera/tree/e3b2a98b25b8b9465d566c370ae36e4c90bf3251))
-> that already had working signatures and a per-frame override
-> mechanism for camera position.
+> **Status: DECLINED.** These features (vertical lock, snap-to-offset,
+> battle pitch, battle vertical offset) were investigated but the
+> project owner decided not to pursue them. In-game testing of the
+> Feature-1 candidate sites found that NOPing `FFXiMain.dll+0x1F07A`
+> did lock vertical movement, but the resulting behavior (camera
+> dropping and getting stuck at a lower height when moving) was not
+> what was wanted; the other four FSTP sites had no observable
+> effect. Document retained for reference / future reconsideration.
 >
-> Reproduce with `python tools/analyze_camera_features.py`.
+> Reproduce the analysis with `python tools/analyze_camera_features.py`.
 
-## TL;DR — much of the work is already done
+## Camera-task struct layout (deduced)
 
-The pre-v0.7 codebase enforced a fixed camera distance by writing
-the camera-position vector each frame (`prerender` lua event). It
-needed three signatures to do that:
+`sub_1001ED90` operates on `this` via `edi`. The accesses we see suggest
+this layout (offsets in bytes from the camera-task object):
 
-| Signature | What it gives | Verified in current April-2026 build? |
-|:--|:--|:--|
-| `83 C4 04 85 C9 74 11 8B 11 6A 01 FF 52 18 C7 05` (operand at +0x10) | `pointerToCamera` — pointer to a slot that holds the live camera-task instance pointer | **Yes** (VA `0x1001E50C`, operand `0x10455D64`) |
-| `80 A0 B2 00 00 00 FB C6 05 ?? ?? ?? ?? 00` (operand at +0x09) | `cameraConnectPtr` — byte = 1 when camera is attached to a player (0 in cutscenes / loading) | **Yes** (VA `0x10084221`, operand `0x10350230`) |
-| `8B CF E8 ?? ?? ?? ?? 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B E8 85 ED 75 0C B9` (operand at +0x19) | `firstPersonPtr` — pointer; `firstPersonPtr[0x28]` = nonzero in first-person view | **Yes** (VA `0x1001F183`, operand `0x10486F50`) |
-
-Plus the FSTP detour anchor:
-| `D8 47 48 D9 5F 48 E8` | `fadd/fstp [edi+0x48]; CALL` — the per-frame camera-position update site | **Yes** (VA `0x1001F077`) |
-
-This unlocks a much cleaner implementation than code-cave injection.
-**The pattern is:** resolve the camera-task root once at load, then
-each frame check (connected && not-first-person) and write whatever
-fields we want directly. The game's own camera math runs as usual;
-we override the result before render.
-
-## Camera-task struct layout (verified)
-
-Per the historical lua code at `e3b2a98b`:
-
-```
-rootCameraAddress = *(uint32_t*)(*pointerToCamera)
-
-  +0x44   cam.X   (world X coordinate)
-  +0x48   cam.Z   (world Z coordinate, NOT vertical)
-  +0x4C   cam.Y   (vertical / world Y / "up" axis)
-  +0x50   focal.X
-  +0x54   focal.Z
-  +0x58   focal.Y (vertical of focal point)
-```
-
-This is FFXi's standard (X, Z, Y) ordering — world up is the third
-component. Important correction to my earlier reading: `[edi+0x48]`
-is the Z axis (one of the horizontal components), not vertical.
-The actual vertical the user wants to lock/snap is `[edi+0x4C]`.
+| Offset    | Likely meaning                                         | Evidence |
+|:----------|:-------------------------------------------------------|:---------|
+| `+0x00`   | Yaw or rotation accumulator (FLD reads, MOV writes)    | 4 accesses |
+| `+0x04`   | Pitch or rotation accumulator                          | `fsubr`/`fadd`/`fstp` pattern at 0x1001F4A0 / 0x10020E4C / 0x10020E56 |
+| `+0x44`   | Camera position vec3 base (x at +0x44, y at +0x48, z at +0x4C) | 7 `lea` ops loading `[edi+0x44]` as a pointer arg |
+| `+0x48`   | **Camera Y (vertical position)** — the user-facing "vertical position" knob | 16 accesses, 5 of which are `fstp` writes |
+| `+0x4C`   | Camera Z                                               | 2 `mov` reads |
+| `+0x50`   | Vec3 base for second position (target?)                | 1 `lea` |
+| `+0x54`   | Likely target Y / vertical clamp anchor                | `fsub`/`fcomp` against camera Y |
+| `+0xBC`   | State block (used as `lea` source)                     | 3 `lea` ops |
+| `+0xF0`   | State byte (camera mode? see compares with `4`)        | `mov [edi+0xf0], 4` and `cmp [edi+0xf0], 4` |
 
 ## Feature 1 — vertical camera position lock
 
-**Goal:** freeze the camera's vertical position so it stops tracking
-the focal point's vertical changes. Manual camera input (right-stick
-up/down) should still work.
+**Goal (per user):** freeze the vertical pitch of the camera so it
+stops updating per-frame. Should work in both battle and normal
+camera modes. User can still manually move camera up/down via input.
 
-**Implementation pattern** (lua per-frame hook):
+**Approach:** the camera Y position is stored at `[edi+0x48]`. There
+are **5 FSTP write sites** that update it each frame:
 
-```lua
--- At addon load:
-ptrToCameraSlot = ashita.memory.findpattern(...) + 0x10
-ptrToCamera     = ashita.memory.read_uint32(ptrToCameraSlot)
-cameraConnectPtr = ... (resolved via signature)
-firstPersonPtr   = ... (resolved via signature)
+| VA            | Bytes (3)    | Context                                          |
+|:--------------|:-------------|:-------------------------------------------------|
+| `0x1001F07A`  | `D9 5F 48`   | Follows `fadd [edi+0x48]` at 0x1001F077          |
+| `0x1001F1CD`  | `D9 5F 48`   | Follows `fadd [edi+0x48]` at 0x1001F1CA          |
+| `0x1001FE15`  | `D9 5F 48`   | End of the proximity-collision Y adjust block   |
+| `0x1002071E`  | `D9 5F 48`   | (untraced — separate Y-adjustment code path)    |
+| `0x10020767`  | `D9 5F 48`   | (untraced — separate Y-adjustment code path)    |
 
-local lockedY = nil  -- nil = not locking
+**Patch shape:** to "lock" vertical position, we'd replace each
+FSTP `[edi+0x48]` with `FSTP ST(0)` followed by a NOP, both kept
+to 3 bytes total to preserve subsequent instruction layout. Bytes:
+`DD D8 90` (= `fstp st(0); nop`). FSTP-ST(0) discards the value
+without writing memory, keeping FPU-stack discipline intact.
 
-ashita.events.register('prerender', 'camera_vlock', function()
-    if not options.verticalLock then return end
-    local cam = ashita.memory.read_uint32(ptrToCamera)
-    if cam == 0 then return end
-    local connected = ashita.memory.read_uint8(cameraConnectPtr) == 1
-    local fps       = ashita.memory.read_uint8(firstPersonPtr + 0x28) ~= 0
-    if not connected or fps then return end
+**Caveats:**
+- Locking ALL five writes might over-constrain — the user's
+  manual "move camera up/down" input may flow through one of
+  these writes. Need to identify which write is the per-frame
+  *automatic* update vs. the *user-input* update. Doing this
+  reliably requires a runtime debugger session or annotated
+  decompile reading.
+- A simpler alternative: lock only the proximity-related write at
+  `0x1001FE15` (which is in the same block as the jitter math)
+  and observe. If that's the main "auto-pull-camera-down" site,
+  this single patch may give the desired feel.
+- Another simpler alternative: **don't do code-modification
+  patches at all** for this feature. Instead, lock vertical via a
+  per-frame lua hook that resets `[edi+0x48]` to the desired
+  value after each frame. That's a different architectural
+  pattern (would need a frame hook, which XICamera doesn't have
+  today).
 
-    if not lockedY then
-        lockedY = ashita.memory.read_float(cam + 0x4C)
-    end
-    ashita.memory.write_float(cam + 0x4C, lockedY)
-end)
+**Recommended next step:** in-game test of NOPing
+`0x1001FE15` alone first (smallest possible change). Then expand
+coverage if needed.
 
--- /camera vlock on|off  -- toggles options.verticalLock + clears lockedY on off
-```
+### Drafted signatures for the FSTP sites
 
-**Manual input still works:** the user's right-stick input feeds
-into the game's per-frame camera math BEFORE prerender. By the time
-prerender fires, the game has already moved the camera. We then
-overwrite the vertical with our locked value. Net: horizontal input
-flows through (we don't touch +0x44 / +0x48), vertical input is
-clobbered by the lock. To allow manual override of the lock, the
-user would issue `/camera vlock off` to clear the lock and use the
-new vertical position as the new lock anchor.
+Each FSTP is exactly `D9 5F 48`, which is too short / common to
+sig-match alone. Sig out longer surrounding context for each site.
+Bytes are taken straight from `tools/analyze_camera_features.py`'s
+disassembly; verify uniqueness before patching:
 
-If the user wants manual vertical input to *update the locked Y*
-while held, that's also doable: detect input via input deltas
-(`isFirstPerson`'s neighbors include input flags) and refresh
-`lockedY` while input is non-zero.
+| Site VA       | Surrounding signature (~16 bytes)                            | FSTP at offset |
+|:--------------|:-------------------------------------------------------------|:---------------|
+| `0x1001F07A`  | (need to dump bytes around 0x1001F070-0x1001F080)            | TBD            |
+| `0x1001F1CD`  | (need to dump bytes around 0x1001F1C0-0x1001F1D0)            | TBD            |
+| `0x1001FE15`  | `D9 05 70 5D 45 10 D8 E1 D8 6F 48 D9 5F 48`                  | `+0x0B`        |
+| `0x1002071E`  | (need to dump bytes around 0x10020715-0x100207A0)            | TBD            |
+| `0x10020767`  | (need to dump bytes around 0x10020760-0x100207B0)            | TBD            |
 
-## Feature 2 — snap vertical to offset
+## Feature 2 — snap vertical position to a specific offset
 
-**Goal:** force vertical to a specific value relative to the focal
-point. E.g., "always sit 2.5 units above focal."
+**Goal (per user):** instead of locking, *snap* the vertical to a
+specific value the user picks (e.g., always sit at Y = +2.5 above
+target).
 
-**Implementation:** trivial extension of Feature 1:
+**Approach:** rather than NOPing the FSTPs, replace each FSTP-source
+with our chosen Y. But the FPU stack value is what's being stored —
+we'd need to *replace* what's on the FPU stack before the FSTP
+fires. That's not a simple operand rewrite.
 
-```lua
-ashita.events.register('prerender', 'camera_vsnap', function()
-    if not options.verticalSnap then return end
-    local cam = ashita.memory.read_uint32(ptrToCamera)
-    if cam == 0 then return end
-    local focal_y = ashita.memory.read_float(cam + 0x58)
-    ashita.memory.write_float(cam + 0x4C, focal_y + options.verticalSnapOffset)
-end)
+**Cleanest implementation:** a code-cave detour around one of the
+update sites that reads our snap value and writes it instead.
+Requires actual code injection (jmp to cave, do the write, jmp
+back). XICamera doesn't have a code-cave mechanism today; would
+need to introduce one (the XIOverclock `Detour` class is the
+template).
 
--- /camera vsnap <offset>   -- sets options.verticalSnapOffset, enables snap
--- /camera vsnap off        -- disables snap
-```
+**Alternative:** approximate "snap" by setting the snap value via
+a lua frame-tick callback. After every frame, write `[edi+0x48]`
+= snap_y. Simpler but requires hooking the frame loop.
 
-`/camera vsnap 0` means "match focal Y exactly." Positive numbers
-sit above focal, negative below.
+**Recommended:** treat this as Phase 2 — first deliver "lock"
+(Feature 1), then build code-cave infrastructure if user finds
+"snap" valuable enough.
 
 ## Feature 3 — battle camera pitch
 
-**Goal:** adjust the downward tilt angle when locked on. User can
-still manually move camera up/down.
+**Goal (per user):** adjust the downward tilt angle when the
+battle camera is locked on. User can still manually move camera
+up/down.
 
-**Pitch is geometric** — the camera-to-focal vector projected onto
-the vertical axis. Computing it:
+**Candidate constants.** The camera task references these
+angle-related floats:
 
-```
-dx = cam.X - focal.X
-dz = cam.Z - focal.Z
-dy = cam.Y - focal.Y
-horiz = sqrt(dx² + dz²)
-pitch = atan2(dy, horiz)   -- positive = looking down
-```
+| Address       | Value     | Likely role                                  |
+|:--------------|:----------|:---------------------------------------------|
+| `0x103293F4`  | `1.8849`  | ≈ 0.6π. Possibly max pitch angle (108°).    |
+| `0x103293F8`  | `1.41367` | ≈ π/4 × 1.8 ≈ 81°. Possibly min pitch.       |
+| `0x10328A30`  | `0.6`     | Pitch damping / scale factor                 |
+| `0x103293E4`  | `0.106667`| Possibly per-frame pitch step                |
 
-To set a target pitch each frame:
+The angle wraparound constants (`0x103293B0..0x103293B8` = 2π/-π/π)
+are clearly modular-arithmetic helpers and probably shouldn't be
+patched.
 
-```lua
-ashita.events.register('prerender', 'camera_pitch', function()
-    if not options.battlePitchEnabled then return end
-    local cam = ashita.memory.read_uint32(ptrToCamera)
-    if cam == 0 then return end
+**Patching strategy** (per-site pointer-rewrite, same shape as
+existing patches):
+1. Find each FMUL/FADD/FSUB referencing one of the candidates.
+2. Verify by in-game test (e.g., change `0x10328A30` from 0.6 to
+   1.2 and see if pitch behaviour changes).
+3. Once confirmed, redirect the operand to a configurable XICamera
+   constant.
 
-    local cx = ashita.memory.read_float(cam + 0x44)
-    local cz = ashita.memory.read_float(cam + 0x48)
-    local cy = ashita.memory.read_float(cam + 0x4C)
-    local fx = ashita.memory.read_float(cam + 0x50)
-    local fz = ashita.memory.read_float(cam + 0x54)
-    local fy = ashita.memory.read_float(cam + 0x58)
-
-    local dx, dz = cx - fx, cz - fz
-    local horiz_dist = math.sqrt(dx*dx + dz*dz)
-    if horiz_dist < 0.01 then return end
-
-    -- Compute desired vertical so that atan2(dy, horiz_dist) = target_pitch.
-    -- Total camera-to-focal distance stays whatever the game decided.
-    local target_pitch = options.battlePitchRadians
-    local total = math.sqrt(dx*dx + dz*dz + (cy - fy)^2)
-    local new_horiz = total * math.cos(target_pitch)
-    local new_vert  = total * math.sin(target_pitch)
-
-    -- Scale x/z components to the new horizontal length, write new vertical.
-    local scale = new_horiz / horiz_dist
-    ashita.memory.write_float(cam + 0x44, fx + dx * scale)
-    ashita.memory.write_float(cam + 0x48, fz + dz * scale)
-    ashita.memory.write_float(cam + 0x4C, fy + new_vert)
-end)
-
--- /camera pitch <degrees>   -- 0 = horizontal, positive = looking down
--- /camera pitch off
-```
-
-**Note:** writing all three components each frame works but might
-fight the game's collision response. Watch for the proximity-buffer
-push #1 / #2 patches from `JITTER_INVESTIGATION.md` interacting
-with this. Probably want pitch + jitter patches to coexist; the
-prerender hook runs after the per-frame camera math (which includes
-the jitter math), so we get the last word.
-
-**Manual override:** if the user moves the camera vertically, do we
-absorb that as the new pitch? Easiest answer: yes, recompute
-`battlePitchRadians` from the post-input camera position whenever
-the user moves the camera, then re-apply on subsequent frames.
-Detecting "user moved" requires watching the input state byte
-(neighbors of `firstPersonPtr + 0x28` likely include input deltas;
-worth poking).
+**Recommended next step:** the user changes the candidate
+constants one at a time *temporarily* (manually patch with a
+debugger or a quick lua override) and reports which one
+corresponds to "pitch tilt." That single experiment narrows
+this down to the right knob.
 
 ## Feature 4 — battle camera vertical offset
 
-**Goal:** shift how high the battle camera floats above the focal
-point.
+**Goal (per user):** shift the height the battle camera floats
+above the locked target. User can still manually move camera
+up/down.
 
-**Implementation:** identical to Feature 2 but only when locked on.
-`/camera vofs <offset>` sets `options.verticalOffset`; the prerender
-hook applies it whenever the lockon flag is set.
+**Hypothesis:** `[edi+0x54]` is the lockon-target Y reference. The
+camera math at `0x1001FDDE` (`fsub [edi+0x54]`) computes
+`cam_y - target_y` — used downstream for clamping. If we add a
+**static offset** to the value loaded from `[edi+0x54]`, the
+camera's effective vertical relationship with the target shifts.
 
-The "is locked on?" flag is somewhere on the camera task; the
-historical code didn't expose it because the per-frame distance fix
-ran in both cases. Need to identify by reading flags around
-`+0xF0`-area in the camera struct (which has a state byte the
-function compares with `4`). Quick test: enter battle, check what
-value `cam[0xF0]` takes vs. out-of-battle. Likely `4` is the
-"locked on" mode.
+`[edi+0x54]` is a per-instance member, not a global, so we can't
+patch its initial value without scoping per camera task. Better
+candidate: find the math that *populates* `[edi+0x54]` (a
+write — not visible in the current xref since we only see 3
+*read* accesses at 0x1001FDDE / 0x1001FE00 / 0x10020A9F). The
+write could be in another function (perhaps when lock-on engages).
 
-## Implementation pattern recap
+**Recommended next step:** spawn a focused decompile read for the
+write site to `[edi+0x54]`. Could come from a constant or from
+target-position math. If from a constant, we have a clean patch
+target.
 
-For all four features, the lua-side architecture is:
+## Quick reference — for the user
 
-1. **At load:** resolve `pointerToCamera`, `cameraConnectPtr`,
-   `firstPersonPtr` via the three historical signatures (verified
-   to still work in April 2026 build).
-2. **Per-frame prerender:** dereference `pointerToCamera` to get
-   the active camera-task root. Bail if the root is null, the
-   camera is disconnected, or the user is in first-person. Read /
-   write whatever struct fields the active feature(s) need.
-3. **Chat commands:** standard absolute + multiplier subcommand
-   pattern from the existing 12 features.
+Stuff that's quick to test in-game:
 
-The C++ Windower 4 DLL needs a similar mechanism. XIPivot has a
-Direct3D Present hook the existing Camera class could borrow; the
-XIOverclock `Detour` machinery would also work. Or — since the lua
-side already has a per-frame hook that's per-launcher, we can
-implement these features in lua only and have Camera.cpp expose
-just the static-data setters (current pattern). That keeps the
-C++ code simple.
+1. **Vertical lock (single-site)**: NOP `0x1001FE15` (3 bytes
+   `D9 5F 48` → `DD D8 90`). Smallest change. Reload addon and
+   walk into walls to verify camera Y stays put.
+2. **Pitch experiment**: in `cheat engine` or x64dbg, change
+   `0x10328A30` from `0.6` to `1.2` (double the value). Lock on
+   to a mob and look for any pitch behavior change. Report what
+   shifts.
+3. **Pitch experiment 2**: change `0x103293F4` from `1.8849` to
+   `2.5` and observe.
+4. **Vertical offset experiment**: while locked on, set a
+   debugger watchpoint on `[edi+0x54]` and observe what value
+   it takes. Then write a different value while standing still
+   and see if camera vertical behavior changes.
 
-**Recommendation:** implement Features 1, 2, 4 in pure lua across
-all three lua addons (Ashita 3 / Ashita 4 / Windower 5), with
-matching `/camera vlock`, `/camera vsnap`, `/camera vofs` commands.
-Feature 3 (pitch) is geometric and works in lua too, but watch out
-for interaction with the per-frame jitter patches.
+Each of these is non-destructive (revert by changing back) and
+gives concrete signal for what each constant does. Once we
+know, the XICamera-side patch is mechanical.
 
 ## What this investigation deliberately *did not* find
 
-- **Code-cave injection paths.** XICamera doesn't need them for
-  Features 1-4; per-frame prerender override is sufficient.
-- **First-person view distance.** Separate code path; not relevant
-  here.
-- **Free-camera default distance.** Also a separate path.
-- **Lock-on engage/disengage triggers.** Probably visible at
-  `+0xF0` in the camera struct; needs in-game probing to confirm.
+- **First-person view distance** — the L1 / Tab-toggled FPS view
+  uses a separate code path entirely (probably outside
+  `sub_1001ED90`). Not investigated here.
+- **The +0x44 base address writes** — we only see `lea` reads,
+  not stores. The vec3 is updated through helper functions
+  (`sub_10027050`, `sub_10026E50`, `sub_10026ED0`, `sub_1001E690`),
+  not direct memory writes. The 5 `[edi+0x48]` writes ARE
+  individual stores; they're the leverage point.
+- **Free-camera default distance** — same as first-person, likely
+  separate code path.

@@ -76,6 +76,7 @@ end
 local defaults = {
     distance           = 6.0,
     battleDistance     = 8.2,
+    battleScale        = 1.37,    -- cam b X writes (X * battleScale) to memory
     battleRange        = 4.0,
     horizontalPanSpeed = 3.0,
     verticalPanSpeed   = 10.7,
@@ -294,9 +295,11 @@ local function setCameraDistance(newDistance)
 end
 
 local function setBattleCameraDistance(newDistance)
+    -- Stash USER-FACING value, write SCALED value to memory.
     options.battleDistance = newDistance
-    state.minBattleDistance.val = newDistance - (state.originalMaxBattleDistance - state.originalMinBattleDistance)
-    state.maxBattleDistance.val = newDistance
+    local effective = newDistance * (options.battleScale or 1.0)
+    state.minBattleDistance.val = effective - (state.originalMaxBattleDistance - state.originalMinBattleDistance)
+    state.maxBattleDistance.val = effective
 end
 
 local function setBattleCameraRange(newRange)
@@ -397,6 +400,15 @@ local function cmd_battle(arg)
     if n then changeAndPersist('Battle distance', setBattleCameraDistance, n) end
 end
 
+local function cmd_bscale(arg)
+    local n = tonumber(arg)
+    if not n then return end
+    options.battleScale = n
+    setBattleCameraDistance(options.battleDistance)  -- re-apply with new scale
+    settings.save()
+    add_text(string.format('Battle scale changed to %.3f (cam b %g now writes %.2f)', n, options.battleDistance, options.battleDistance * n))
+end
+
 local function cmd_hspeed(arg)
     local n = tonumber(arg)
     if n then changeAndPersist('Horizontal pan speed', setHorizontalPanSpeed, n) end
@@ -407,47 +419,6 @@ local function cmd_vspeed(arg)
     if n then
         options.autoCalcVertSpeed = false
         changeAndPersist('Vertical pan speed', setVerticalPanSpeed, n)
-    end
-end
-
-local function cmd_dmult(arg)
-    local m = tonumber(arg)
-    if m then
-        local v = defaults.distance * m
-        setCameraDistance(v)
-        settings.save()
-        add_text(string.format('Distance changed to %.3f (%.2fx stock %.1f)', v, m, defaults.distance))
-    end
-end
-
-local function cmd_bmult(arg)
-    local m = tonumber(arg)
-    if m then
-        local v = defaults.battleDistance * m
-        setBattleCameraDistance(v)
-        settings.save()
-        add_text(string.format('Battle distance changed to %.3f (%.2fx stock %.1f)', v, m, defaults.battleDistance))
-    end
-end
-
-local function cmd_hsmult(arg)
-    local m = tonumber(arg)
-    if m then
-        local v = defaults.horizontalPanSpeed * m
-        setHorizontalPanSpeed(v)
-        settings.save()
-        add_text(string.format('Horizontal pan speed changed to %.3f (%.2fx stock %.1f)', v, m, defaults.horizontalPanSpeed))
-    end
-end
-
-local function cmd_vsmult(arg)
-    local m = tonumber(arg)
-    if m then
-        options.autoCalcVertSpeed = false
-        local v = defaults.verticalPanSpeed * m
-        setVerticalPanSpeed(v)
-        settings.save()
-        add_text(string.format('Vertical pan speed changed to %.3f (%.2fx stock %.1f, autoCalc off)', v, m, defaults.verticalPanSpeed))
     end
 end
 
@@ -497,7 +468,7 @@ end
 local function cmd_status()
     add_text('XICamera status')
     add_text('  cameraDistance:     ' .. options.distance)
-    add_text('  battleDistance:     ' .. options.battleDistance)
+    add_text(string.format('  battleDistance:     %g (effective %.2f at scale %.3f)', options.battleDistance, options.battleDistance * (options.battleScale or 1.0), options.battleScale or 1.0))
     add_text('  battleRange:        ' .. options.battleRange)
     add_text('  battleRangeLocked:  ' .. tostring(options.battleRangeLocked))
     add_text('  horizontalPanSpeed: ' .. options.horizontalPanSpeed)
@@ -509,13 +480,10 @@ end
 local function cmd_help()
     add_text('XICamera — </camera | /cam | /xicamera | /xicam> ...')
     add_text('  d|distance <n>     set camera distance (default ' .. defaults.distance .. ')')
-    add_text('  dm|dmult <ratio>   multiply stock distance (1.0 = stock)')
     add_text('  b|battle <n>       set battle camera distance (default ' .. defaults.battleDistance .. ')')
-    add_text('  bm|bmult <ratio>   multiply stock battle distance')
+    add_text(string.format('  bscale <n>        battle distance scale (default %.2f)', defaults.battleScale))
     add_text('  hs|hspeed <n>      set horizontal pan speed (default ' .. defaults.horizontalPanSpeed .. ')')
-    add_text('  hsm|hsmult <ratio> multiply stock horizontal pan')
     add_text('  vs|vspeed <n>      set vertical pan speed (default ' .. defaults.verticalPanSpeed .. ', forces autoCalc off)')
-    add_text('  vsm|vsmult <ratio> multiply stock vertical pan, forces autoCalc off')
     add_text('  br|brange <0-100>  set battle camera range, forces lock on')
     add_text('  bl|battlelock <on|off>  lock/unlock 360deg battle camera')
     add_text('  in|incr / de|decr  step camera distance by 1')
@@ -538,18 +506,11 @@ for _, cmd in ipairs(commands) do
     cmd:register('d',                 cmd_distance,    '<n:number>')
     cmd:register('battle',            cmd_battle,      '<n:number>')
     cmd:register('b',                 cmd_battle,      '<n:number>')
+    cmd:register('bscale',            cmd_bscale,      '<n:number>')
     cmd:register('hspeed',            cmd_hspeed,      '<n:number>')
     cmd:register('hs',                cmd_hspeed,      '<n:number>')
     cmd:register('vspeed',            cmd_vspeed,      '<n:number>')
     cmd:register('vs',                cmd_vspeed,      '<n:number>')
-    cmd:register('dmult',             cmd_dmult,       '<m:number>')
-    cmd:register('dm',                cmd_dmult,       '<m:number>')
-    cmd:register('bmult',             cmd_bmult,       '<m:number>')
-    cmd:register('bm',                cmd_bmult,       '<m:number>')
-    cmd:register('hsmult',            cmd_hsmult,      '<m:number>')
-    cmd:register('hsm',               cmd_hsmult,      '<m:number>')
-    cmd:register('vsmult',            cmd_vsmult,      '<m:number>')
-    cmd:register('vsm',               cmd_vsmult,      '<m:number>')
     cmd:register('brange',            cmd_brange,      '<n:number>')
     cmd:register('br',                cmd_brange,      '<n:number>')
     cmd:register('battlelock',        cmd_battlelock,  '<state:string>')
