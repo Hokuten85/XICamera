@@ -8,6 +8,12 @@ XICamera is an addon that allows to change the camera distance.
 - 2) (Optional) Edit `data/settings.xml`:
    - change the default camera distance. Camera and Battle distance will be defaulted to 6 and 8.2 if no setting is specified.
 
+The Windower build includes `libs/_WindowerMemory.dll`, a small Lua C module
+that exposes a generic memory namespace for Windower addons.
+`XICamera.lua` uses that generic memory layer for all process scans, reads,
+writes, allocation, and unload restoration; camera-specific behavior remains
+in Lua.
+
 settings.xml:
 
 ```xml
@@ -31,6 +37,7 @@ The following parameters are supported:
 - b/battle #             -- will change the battle camera distance - default: 8
 - hs/hspeed #            -- will change the horizontal panning speed - default: 3
 - vs/vspeed #            -- will change the vertical panning speed - default: 10, this forces auto calc off
+- vh/vheight #           -- snaps camera height to character/reference height plus #
 - in/incr		         -- will increment camera distance by 1
 - de/decr		         -- will decrement camera distance by 1
 - bin/bincr		         -- will increment battle camera distance by 1

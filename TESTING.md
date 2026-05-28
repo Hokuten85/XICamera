@@ -79,6 +79,21 @@ combat camera moves to N units. Default `8.2`.
 underlying scalar is `<value> / 100`. Stock values map to roughly
 3 (h) and 10.7 (v).
 
+## Vertical height snap (`/camera vheight N` or `/camera vh N`)
+
+**Expect:** the camera height snaps once to the current
+character/reference height plus N. This is not a lock; normal camera
+updates continue after the snap.
+
+**Quick verify:**
+
+1. Stand somewhere with open space above the character.
+2. `/camera status` and note `cameraY` / `referenceY`.
+3. `/camera vh 20` — the camera should jump upward; status should
+   report `cameraY` near `referenceY + 20`.
+4. Bind the command in the launcher if desired, e.g. bind a key to
+   run `/camera vh 20` or `//camera vh 20`.
+
 ## Battle range and lock (`/camera br N`, `/camera bl on|off`)
 
 **Expect:** wider/narrower angular sweep around a locked target;

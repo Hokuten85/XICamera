@@ -1,127 +1,52 @@
-/*
- * 	Copyright © 2019, Renee Koecher
- * 	All rights reserved.
- * 
- * 	Redistribution and use in source and binary forms, with or without
- * 	modification, are permitted provided that the following conditions are met :
- * 
- * 	* Redistributions of source code must retain the above copyright
- * 	  notice, this list of conditions and the following disclaimer.
- * 	* Redistributions in binary form must reproduce the above copyright
- * 	  notice, this list of conditions and the following disclaimer in the
- * 	  documentation and/or other materials provided with the distribution.
- * 	* Neither the name of XICamera nor the
- * 	  names of its contributors may be used to endorse or promote products
- * 	  derived from this software without specific prior written permission.
- * 
- * 	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
- * 	ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * 	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * 	DISCLAIMED.IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
- * 	DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * 	(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * 	LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * 	ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * 	(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * 	SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-
 #pragma once
 
-extern "C"
-{
-#	define LUA_BUILD_AS_DLL
-
-#	include "lauxlib.h"
-#	include "lua.h"
+extern "C" {
+#   ifndef LUA_BUILD_AS_DLL
+#       define LUA_BUILD_AS_DLL
+#   endif
+#   include "lauxlib.h"
+#   include "lua.h"
 }
 
-#include "../../XICamera.Core/Camera.h"
+namespace XICamera {
 
-namespace XICamera
-{
-	/* a simple, mostly static interface addon-on to
-	 * provide interopperability with the LUA-C API 
-	 */
-	class WindowerInterface : public Core::Camera
-	{
-		public:
-			~WindowerInterface(void) {};
+class WindowerInterface {
+public:
+    static int registerInterface(lua_State* L);
 
-			static int registerInterface(lua_State *L);
+private:
+    static int lua_get_base(lua_State* L);
+    static int lua_get_size(lua_State* L);
+    static int lua_find(lua_State* L);
+    static int lua_alloc(lua_State* L);
+    static int lua_dealloc(lua_State* L);
+    static int lua_unprotect(lua_State* L);
 
-			/* interface methods */
+    static int lua_read_uint8(lua_State* L);
+    static int lua_read_uint16(lua_State* L);
+    static int lua_read_uint32(lua_State* L);
+    static int lua_read_uint64(lua_State* L);
+    static int lua_read_int8(lua_State* L);
+    static int lua_read_int16(lua_State* L);
+    static int lua_read_int32(lua_State* L);
+    static int lua_read_int64(lua_State* L);
+    static int lua_read_float(lua_State* L);
+    static int lua_read_double(lua_State* L);
+    static int lua_read_array(lua_State* L);
+    static int lua_read_string(lua_State* L);
 
-			/* internally calls Camera::setupHooks
-			 *
-			 * arguments: none
-			 * returns: a boolean indicating the operation result
-			 */
-			static int lua_enable(lua_State *L);
+    static int lua_write_uint8(lua_State* L);
+    static int lua_write_uint16(lua_State* L);
+    static int lua_write_uint32(lua_State* L);
+    static int lua_write_uint64(lua_State* L);
+    static int lua_write_int8(lua_State* L);
+    static int lua_write_int16(lua_State* L);
+    static int lua_write_int32(lua_State* L);
+    static int lua_write_int64(lua_State* L);
+    static int lua_write_float(lua_State* L);
+    static int lua_write_double(lua_State* L);
+    static int lua_write_array(lua_State* L);
+    static int lua_write_string(lua_State* L);
+};
 
-			/* internally calls Camera::removeHooks
-			 *
-			 * arguments: none
-			 * returns: a boolean representing the operation result
-			 */
-			static int lua_disable(lua_State *L);
-
-			/* internally calls Camera::setCameraDistance
-			 *
-			 * arguments: [1] - int: newDistance
-			 * returns: a boolean representing the operation result
-			 */
-			static int lua_setCameraDistance(lua_State *L);
-
-			/* internally calls Camera::setBattleDistance
-			 *
-			 * arguments: [1] - int: newDistance
-			 * returns: a boolean representing the operation result
-			 */
-			static int lua_setBattleDistance(lua_State* L);
-
-			/* internally calls Camera::setHorizontalPanSpeed
-			 *
-			 * arguments: [1] - int: newSpeed
-			 * returns: a boolean representing the operation result
-			 */
-			static int lua_setHorizontalPanSpeed(lua_State* L);
-
-			/* internally calls Camera::setVerticalPanSpeed
-			 *
-			 * arguments: [1] - int: newSpeed
-			 * returns: a boolean representing the operation result
-			 */
-			static int lua_setVerticalPanSpeed(lua_State* L);
-
-			/* internally calls Camera::setBattleCameraRange
-			 *
-			 * arguments: [1] - int: newRange
-			 * returns: a boolean representing the operation result
-			 */
-			static int lua_setBattleCameraRange(lua_State* L);
-
-			/* internally calls Camera::setBattleRangeLock
-			 *
-			 * arguments: [1] - bool: isLocked
-			 * returns: a boolean representing the operation result
-			 */
-			static int lua_setBattleRangeLock(lua_State* L);
-
-			/* collects some of the internal data of the Camera
-			 *
-			 * arguments: none
-			 * returns: a table of the following make-up
-			 *  {
-			 *		"enabled": <boolean>,
-			 *      "camera distance": <int>
-			 *      "battle distance": <int>
-			 *  }
-			 */
-			static int lua_getStatus(lua_State* L);
-
-		protected:
-			WindowerInterface(void) : Camera() {};
-	};
-}
-
+} // namespace XICamera

@@ -2,4 +2,5 @@ LIBRARY _XICamera.dll;
 
 EXPORTS
 	luaopen__XICamera
+	luaopen__WindowerMemory
 

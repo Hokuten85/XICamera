@@ -1,13 +1,14 @@
 # Camera Feature Candidates — Investigation Notes
 
-> **Status: DECLINED.** These features (vertical lock, snap-to-offset,
-> battle pitch, battle vertical offset) were investigated but the
-> project owner decided not to pursue them. In-game testing of the
-> Feature-1 candidate sites found that NOPing `FFXiMain.dll+0x1F07A`
-> did lock vertical movement, but the resulting behavior (camera
-> dropping and getting stuck at a lower height when moving) was not
-> what was wanted; the other four FSTP sites had no observable
-> effect. Document retained for reference / future reconsideration.
+> **Status:** vertical lock was declined, but one-shot vertical
+> snap-to-offset has been implemented. In-game testing of the
+> Feature-1 lock candidate sites found that NOPing
+> `FFXiMain.dll+0x1F07A` did lock vertical movement, but the resulting
+> behavior (camera dropping and getting stuck at a lower height when
+> moving) was not what was wanted; the other four FSTP sites had no
+> observable effect. The shipped `vheight|vh` command avoids that
+> lock behavior by writing camera Y once and then letting the normal
+> camera update loop continue.
 >
 > Reproduce the analysis with `python tools/analyze_camera_features.py`.
 
@@ -94,25 +95,23 @@ disassembly; verify uniqueness before patching:
 specific value the user picks (e.g., always sit at Y = +2.5 above
 target).
 
-**Approach:** rather than NOPing the FSTPs, replace each FSTP-source
-with our chosen Y. But the FPU stack value is what's being stored —
-we'd need to *replace* what's on the FPU stack before the FSTP
-fires. That's not a simple operand rewrite.
+**Implemented approach:** avoid patching the FSTP sites entirely.
+The camera manager global stores the live camera-task pointer at
+`cameraManager + 0x50`. The command reads that pointer, reads the
+current reference/target Y at `[cameraTask + 0x54]`, and writes
+`referenceY + offset` to `[cameraTask + 0x48]`.
 
-**Cleanest implementation:** a code-cave detour around one of the
-update sites that reads our snap value and writes it instead.
-Requires actual code injection (jmp to cave, do the write, jmp
-back). XICamera doesn't have a code-cave mechanism today; would
-need to introduce one (the XIOverclock `Detour` class is the
-template).
+The signature for resolving the camera manager global is:
 
-**Alternative:** approximate "snap" by setting the snap value via
-a lua frame-tick callback. After every frame, write `[edi+0x48]`
-= snap_y. Simpler but requires hooking the frame loop.
+`A1 ?? ?? ?? ?? 05 94 02 00 00 C3 90 90 90 90 90 A1 ?? ?? ?? ?? 8B 40 50 C3`
 
-**Recommended:** treat this as Phase 2 — first deliver "lock"
-(Feature 1), then build code-cave infrastructure if user finds
-"snap" valuable enough.
+The second `A1` operand is the absolute address of the camera-manager
+global; dereference it, then dereference `+0x50` to get the camera
+task.
+
+This is intentionally a one-shot snap. It does not fight the normal
+per-frame camera update, which is what made the earlier vertical-lock
+experiment feel bad.
 
 ## Feature 3 — battle camera pitch
 

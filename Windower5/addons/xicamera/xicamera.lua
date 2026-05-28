@@ -76,7 +76,6 @@ end
 local defaults = {
     distance           = 6.0,
     battleDistance     = 8.2,
-    battleScale        = 1.37,    -- cam b X writes (X * battleScale) to memory
     battleRange        = 4.0,
     horizontalPanSpeed = 3.0,
     verticalPanSpeed   = 10.7,
@@ -136,6 +135,8 @@ local state = {
     newBattleRange       = nil,
     battleRangeLockSlot  = nil,         -- match + 0x19  (the 2-byte clamp)
     originalBattleRangeLockBytes = nil,
+
+    cameraManagerGlobal  = nil,
 }
 
 -- ---------------------------------------------------------------------------
@@ -269,6 +270,13 @@ local function scan_setup()
         state.battleRangeLockSlot = ffi_cast('uint16_t*', br_match + 0x19)
         state.originalBattleRangeLockBytes = state.battleRangeLockSlot[0]
     end
+
+    local camera_manager_operand = ffi_cast('uint32_t*', scanner.scan('A1????????0594020000C39090909090A1&????????8B4050C3'))
+    if camera_manager_operand ~= nil then
+        state.cameraManagerGlobal = ffi_cast('uint32_t*', camera_manager_operand[0])
+    else
+        add_text('[xicamera] WARN: camera manager signature not found; vertical height snap unavailable')
+    end
 end
 
 -- ---------------------------------------------------------------------------
@@ -295,11 +303,9 @@ local function setCameraDistance(newDistance)
 end
 
 local function setBattleCameraDistance(newDistance)
-    -- Stash USER-FACING value, write SCALED value to memory.
     options.battleDistance = newDistance
-    local effective = newDistance * (options.battleScale or 1.0)
-    state.minBattleDistance.val = effective - (state.originalMaxBattleDistance - state.originalMinBattleDistance)
-    state.maxBattleDistance.val = effective
+    state.minBattleDistance.val = newDistance - (state.originalMaxBattleDistance - state.originalMinBattleDistance)
+    state.maxBattleDistance.val = newDistance
 end
 
 local function setBattleCameraRange(newRange)
@@ -317,6 +323,25 @@ local function setBattleRangeLock(isLocked)
     else
         state.battleRangeLockSlot[0] = 0x9090
     end
+end
+
+local function getCameraTask()
+    if state.cameraManagerGlobal == nil then return nil end
+    local manager = tonumber(state.cameraManagerGlobal[0])
+    if manager == 0 then return nil end
+    local camera_task_slot = ffi_cast('uint32_t*', manager + 0x50)
+    local camera_task = tonumber(camera_task_slot[0])
+    if camera_task == 0 then return nil end
+    return ffi_cast('float*', camera_task)
+end
+
+local function snapVerticalCameraOffset(offset)
+    local cameraTask = getCameraTask()
+    if cameraTask == nil then return nil end
+    local referenceY = cameraTask[0x54 / 4]
+    local cameraY = referenceY + offset
+    cameraTask[0x48 / 4] = cameraY
+    return cameraY, referenceY
 end
 
 local function applyAll()
@@ -400,15 +425,6 @@ local function cmd_battle(arg)
     if n then changeAndPersist('Battle distance', setBattleCameraDistance, n) end
 end
 
-local function cmd_bscale(arg)
-    local n = tonumber(arg)
-    if not n then return end
-    options.battleScale = n
-    setBattleCameraDistance(options.battleDistance)  -- re-apply with new scale
-    settings.save()
-    add_text(string.format('Battle scale changed to %.3f (cam b %g now writes %.2f)', n, options.battleDistance, options.battleDistance * n))
-end
-
 local function cmd_hspeed(arg)
     local n = tonumber(arg)
     if n then changeAndPersist('Horizontal pan speed', setHorizontalPanSpeed, n) end
@@ -419,6 +435,17 @@ local function cmd_vspeed(arg)
     if n then
         options.autoCalcVertSpeed = false
         changeAndPersist('Vertical pan speed', setVerticalPanSpeed, n)
+    end
+end
+
+local function cmd_vheight(arg)
+    local n = tonumber(arg)
+    if not n then return end
+    local cameraY, referenceY = snapVerticalCameraOffset(n)
+    if cameraY then
+        add_text(string.format('Camera height snapped to %.2f (reference %.2f + %.2f)', cameraY, referenceY, n))
+    else
+        add_text('[xicamera] WARN: camera task not available; vertical snap failed')
     end
 end
 
@@ -468,11 +495,16 @@ end
 local function cmd_status()
     add_text('XICamera status')
     add_text('  cameraDistance:     ' .. options.distance)
-    add_text(string.format('  battleDistance:     %g (effective %.2f at scale %.3f)', options.battleDistance, options.battleDistance * (options.battleScale or 1.0), options.battleScale or 1.0))
+    add_text('  battleDistance:     ' .. options.battleDistance)
     add_text('  battleRange:        ' .. options.battleRange)
     add_text('  battleRangeLocked:  ' .. tostring(options.battleRangeLocked))
     add_text('  horizontalPanSpeed: ' .. options.horizontalPanSpeed)
     add_text('  verticalPanSpeed:   ' .. options.verticalPanSpeed)
+    local cameraTask = getCameraTask()
+    if cameraTask ~= nil then
+        add_text(string.format('  cameraY:            %.2f', cameraTask[0x48 / 4]))
+        add_text(string.format('  referenceY:         %.2f', cameraTask[0x54 / 4]))
+    end
     add_text('  autoCalcVertSpeed:  ' .. tostring(options.autoCalcVertSpeed))
     add_text('  saveOnIncrement:    ' .. tostring(options.saveOnIncrement))
 end
@@ -481,9 +513,9 @@ local function cmd_help()
     add_text('XICamera — </camera | /cam | /xicamera | /xicam> ...')
     add_text('  d|distance <n>     set camera distance (default ' .. defaults.distance .. ')')
     add_text('  b|battle <n>       set battle camera distance (default ' .. defaults.battleDistance .. ')')
-    add_text(string.format('  bscale <n>        battle distance scale (default %.2f)', defaults.battleScale))
     add_text('  hs|hspeed <n>      set horizontal pan speed (default ' .. defaults.horizontalPanSpeed .. ')')
     add_text('  vs|vspeed <n>      set vertical pan speed (default ' .. defaults.verticalPanSpeed .. ', forces autoCalc off)')
+    add_text('  vh|vheight <n>     snap camera height to character/reference height plus n')
     add_text('  br|brange <0-100>  set battle camera range, forces lock on')
     add_text('  bl|battlelock <on|off>  lock/unlock 360deg battle camera')
     add_text('  in|incr / de|decr  step camera distance by 1')
@@ -506,11 +538,14 @@ for _, cmd in ipairs(commands) do
     cmd:register('d',                 cmd_distance,    '<n:number>')
     cmd:register('battle',            cmd_battle,      '<n:number>')
     cmd:register('b',                 cmd_battle,      '<n:number>')
-    cmd:register('bscale',            cmd_bscale,      '<n:number>')
     cmd:register('hspeed',            cmd_hspeed,      '<n:number>')
     cmd:register('hs',                cmd_hspeed,      '<n:number>')
     cmd:register('vspeed',            cmd_vspeed,      '<n:number>')
     cmd:register('vs',                cmd_vspeed,      '<n:number>')
+    cmd:register('vheight',           cmd_vheight,     '<n:number>')
+    cmd:register('vh',                cmd_vheight,     '<n:number>')
+    cmd:register('snapheight',        cmd_vheight,     '<n:number>')
+    cmd:register('sh',                cmd_vheight,     '<n:number>')
     cmd:register('brange',            cmd_brange,      '<n:number>')
     cmd:register('br',                cmd_brange,      '<n:number>')
     cmd:register('battlelock',        cmd_battlelock,  '<state:string>')

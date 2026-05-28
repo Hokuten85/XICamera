@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="lua\XICamera.lua" />
+    <None Include="lua\lib\windower_native.lua" />
     <None Include="module\exports.def" />
   </ItemGroup>
   <ItemGroup>
@@ -45,26 +46,26 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -134,7 +135,8 @@ rmdir /S /Q "$(SolutionDir)build\$(Configuration)\Windower"</Command>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>xcopy /E /I /Y /Q "$(ProjectDir)lua" "$(SolutionDir)build\$(Configuration)\Windower\XICamera"
-xcopy /Y /Q "$(OutDir)$(TargetName)$(TargetExt)" "$(SolutionDir)build\$(Configuration)\Windower\XICamera\libs\$(TargetName)$(TargetExt)*"</Command>
+xcopy /Y /Q "$(OutDir)$(TargetName)$(TargetExt)" "$(SolutionDir)build\$(Configuration)\Windower\XICamera\libs\$(TargetName)$(TargetExt)*"
+xcopy /Y /Q "$(OutDir)$(TargetName)$(TargetExt)" "$(SolutionDir)build\$(Configuration)\Windower\XICamera\libs\_WindowerMemory$(TargetExt)*"</Command>
     </PostBuildEvent>
     <PostBuildEvent>
       <Message>copy the build results to a Windower addon-bundle</Message>
@@ -187,7 +189,8 @@ rmdir /S /Q "$(SolutionDir)build\$(Configuration)\Windower"</Command>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>xcopy /E /I /Y /Q "$(ProjectDir)lua" "$(SolutionDir)build\$(Configuration)\Windower\XICamera"
-xcopy /Y /Q "$(OutDir)$(TargetName)$(TargetExt)" "$(SolutionDir)build\$(Configuration)\Windower\XICamera\libs\$(TargetName)$(TargetExt)*"</Command>
+xcopy /Y /Q "$(OutDir)$(TargetName)$(TargetExt)" "$(SolutionDir)build\$(Configuration)\Windower\XICamera\libs\$(TargetName)$(TargetExt)*"
+xcopy /Y /Q "$(OutDir)$(TargetName)$(TargetExt)" "$(SolutionDir)build\$(Configuration)\Windower\XICamera\libs\_WindowerMemory$(TargetExt)*"</Command>
     </PostBuildEvent>
     <PostBuildEvent>
       <Message>copy the build results to a Windower addon-bundle</Message>

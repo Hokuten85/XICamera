@@ -12,6 +12,7 @@ camera obeys you instead of stock SE defaults.
 | **Pan speeds (h / v)** | Mouse / right-stick rotation speed. Vertical can auto-rescale with distance. | 3 / 10.7 |
 | **Battle camera range** | Angular sweep allowed when rotating around a locked target. 0–100; > ~50 reaches past 180°. | 4 |
 | **Battle range lock** | When OFF, removes the 2-byte FPU clamp and the camera rotates a full 360° around the target. | ON |
+| **Vertical height snap** | One-shot command that sets camera height to the current character/reference height plus an offset. Useful for binding to a key. | n/a |
 | **Jitter cancel** | Replaces the 0.125 jitter scalar with 1.0 so rapid movement stops shrinking the camera. | always on |
 
 ## Quick start
@@ -39,9 +40,9 @@ camera obeys you instead of stock SE defaults.
 /camera status                      # multi-line dump of current values
 /camera d|distance <n>              # set camera distance (default 6)
 /camera b|battle <n>                # set battle camera distance (default 8.2)
-/camera bscale <n>                  # battle distance scale; cam b X writes X * bscale to memory
 /camera hs|hspeed <n>               # set horizontal pan speed (default 3)
 /camera vs|vspeed <n>               # set vertical pan speed; forces autoCalc OFF
+/camera vh|vheight <n>              # snap camera height to character/reference height + n
 /camera br|brange <0-100>           # battle camera range; forces lock ON
 /camera bl|battlelock <on|off>      # 360° rotation around locked target when OFF
 /camera in|incr  /  /camera de|decr # ±1 on camera distance
@@ -50,13 +51,6 @@ camera obeys you instead of stock SE defaults.
 /camera acv|autoCalcVertSpeed       # toggle vertical pan auto-rescaling
 /camera h|help                      # one-line hint per command
 ```
-
-`bscale` exists because the battle camera's effective distance from
-its focal point doesn't track the raw value the way the regular
-camera does — at the same numeric input, the battle camera tends to
-feel closer. The default scale (1.37) matches the stock 8.2/6.0
-ratio between the two modes; tune higher if `cam b N` still feels
-closer than `cam d N` for you.
 
 `/cam`, `/xicamera`, and `/xicam` are accepted as aliases of
 `/camera` on every launcher. Settings persist via the launcher's

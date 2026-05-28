@@ -15,6 +15,7 @@ The following parameters are supported:
 - b/battle #             -- will change the battle camera distance - default: 8.2
 - hs/hspeed #            -- will change the horizontal panning speed - default: 3
 - vs/vspeed #            -- will change the vertical panning speed - default: 10.7, this forces auto calc off
+- vh/vheight #           -- snaps camera height to character/reference height plus #
 - in/incr		             -- will increment camera distance by 1
 - de/decr		             -- will decrement camera distance by 1
 - bin/bincr		           -- will increment battle camera distance by 1
