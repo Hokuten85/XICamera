@@ -33,8 +33,6 @@ Settings save through Windower 5's settings library.
 
 XICamera never overwrites the client's own constants; it points the camera code at floats it owns, and only while the bytes at each site are the ones it found. A site another tool already changed is left alone and listed by `//cam status` as `owned`, `neutral` or `foreign`.
 
-Between load and unload XICamera does not watch its sites. If another tool changes one of them after XICamera loaded, XICamera leaves it that way. `//cam status` re-reads the sites and reports what changed, without writing anything, and unloading restores only the sites that still hold XICamera's own values.
-
 ## What changed in 0.8
 
 Earlier versions wrote the user's distance straight into the client's 3.0 and 6.0 constants. Those numbers are shared with unrelated code, including the clamp on the running-animation rate, which is where the "NPCs run strangely after logging in" reports came from. 0.8 leaves the constants untouched.

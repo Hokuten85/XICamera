@@ -6,6 +6,8 @@
 #      a pre-release when the version has a suffix (v0.8.0-pre1, v0.9.0-rc2).
 #      An annotated tag's message is the release notes, as written: keep it to
 #      what changed for players. A plain tag gets GitHub's generated notes.
+#      Create it with `git tag -a --cleanup=verbatim` or git strips the
+#      markdown headings (lines starting with #) as comments.
 #    * "Run workflow" with a version and a pre-release switch, for a release
 #      cut from any branch without tagging first (the tag is created for you).
 #
