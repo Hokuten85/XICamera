@@ -185,7 +185,7 @@ local function printStatus()
     add_text('  battleRangeLocked: ' .. tostring(options.battleRangeLocked))
     add_text('  saveOnIncrement: ' .. tostring(options.saveOnIncrement))
     add_text('  autoCalcVertSpeed: ' .. tostring(options.autoCalcVertSpeed))
-    for _, site in ipairs(core:status()) do
+    for _, site in ipairs(core:status(true)) do
         if site.state ~= 'patched' then
             add_text(string.format('  %s: %s%s', site.name, site.state, site.note and (' (' .. site.note .. ')') or ''))
         end
@@ -279,14 +279,6 @@ local function cmd_toggle_acv()
     add_text('autoCalcVertSpeed = ' .. tostring(options.autoCalcVertSpeed))
 end
 
--- Windower 5 has no per-frame event this addon uses, so the re-check the other
--- ports run inside their windows (core:recheck) is driven from the status command here: //camera status also
--- re-applies a patch another tool reverted and reports takeovers.
-local function cmd_status()
-    core:recheckNow()
-    printStatus()
-end
-
 -- Wire up to four command aliases (//camera, //cam, //xicamera, //xicam).
 local commands = {
     command.new('camera'),
@@ -324,8 +316,8 @@ for _, cmd in ipairs(commands) do
     cmd:register('soi',             cmd_toggle_soi)
     cmd:register('autoCalcVertSpeed', cmd_toggle_acv)
     cmd:register('acv',               cmd_toggle_acv)
-    cmd:register('status', cmd_status)
-    cmd:register('s',      cmd_status)
+    cmd:register('status', printStatus)
+    cmd:register('s',      printStatus)
     cmd:register('help',   printHelp)
     cmd:register('h',      printHelp)
 end

@@ -77,9 +77,7 @@ end
 
 local nextAlloc = ALLOC_BASE
 local log = {}
-local clock = 1000   -- fake seconds; tests advance it
 local mem = {
-    now = function() return clock end,
     find = function(sig)
         local pat = {}
         for i = 1, #sig, 2 do
@@ -143,72 +141,49 @@ check(core:battleRangeLocked() == true, 'battle range starts locked')
 check(core:setBattleRangeLock(false) and core:battleRangeLocked() == false, 'unlock writes the NOPs')
 check(core:setBattleRangeLock(true) and core:battleRangeLocked() == true, 'lock restores fld1')
 
--- ---------------------------------------------------------------- recheck: reverted and taken over
-print('recheck')
-mem.write_u32(eyeC.at, eyeC.original)                         -- another tool wrote the client's operand back
-clock = clock + 1 core:recheck()
-check(mem.read_u32(eyeC.at) == core:slotAddress('min'), 'a reverted operand is re-applied on the next pass')
+-- ---------------------------------------------------------------- other tools after load: XICamera lets them
+print('after load')
+for k in pairs(Core) do
+    check(not tostring(k):lower():find('recheck'), 'no re-check entry point in the core (' .. tostring(k) .. ')')
+end
+mem.write_u32(eyeC.at, eyeC.original)                           -- another tool wrote the client's operand back
+check(mem.read_u32(eyeC.at) == eyeC.original, 'nothing puts the patch back on its own')
+local rows = core:status(true)
+check(eyeC.state == 'reverted', 'a status refresh reports the revert (' .. tostring(eyeC.state) .. ')')
+check(mem.read_u32(eyeC.at) == eyeC.original, 'the refresh wrote nothing')
 
 local jx = siteByName(core, 'jitter push x')
 local foreignOne = mem.alloc(4) mem.write_float(foreignOne, 1.0)
 mem.write_u32(jx.at, foreignOne)                                -- another tool pointed it at its own 1.0
-clock = clock + 1 core:recheck()
-check(jx.state == 'neutral', 'a takeover at our value becomes neutral (' .. tostring(jx.state) .. ')')
-check(mem.read_u32(jx.at) == foreignOne, 'a neutral site is not written back')
+core:refresh()
+check(jx.state == 'neutral' and mem.read_u32(jx.at) == foreignOne, 'a takeover at our value is neutral and left alone')
 mem.write_u32(jx.at, jx.original)                               -- the other tool unloaded
-clock = clock + 1 core:recheck()
-check(jx.state == 'patched' and mem.read_u32(jx.at) == core:slotAddress('jitter'), 'a handed-back site is retaken')
+core:refresh()
+check(jx.state == 'neutral' and mem.read_u32(jx.at) == jx.original, 'a handed-back site is not retaken')
 
--- ---------------------------------------------------------------- the re-check window
-print('re-check window')
-mem.write_u32(eyeC.at, eyeC.original)
-core:recheck()                                                  -- same second as the last pass: no work
-check(mem.read_u32(eyeC.at) == eyeC.original, 'at most one pass per second')
-clock = clock + 1 core:recheck()
-check(mem.read_u32(eyeC.at) == core:slotAddress('min'), 'the next second re-applies')
-clock = clock + Core.RECHECK_WINDOW + 1
-check(not core:recheckActive(), 'the window closes ' .. Core.RECHECK_WINDOW .. ' seconds after install')
-mem.write_u32(eyeC.at, eyeC.original)
-clock = clock + 1 core:recheck()
-check(mem.read_u32(eyeC.at) == eyeC.original, 'outside the window nothing is re-applied')
-check(core:onEnterWorld(), 'the first world entry after install opens a window')
-clock = clock + 1 core:recheck()
-check(mem.read_u32(eyeC.at) == core:slotAddress('min'), 'the first world entry brings the patch back')
-clock = clock + Core.RECHECK_WINDOW + 1
-mem.write_u32(eyeC.at, eyeC.original)
-check(not core:onEnterWorld() and not core:recheckActive(), 'a later zone-in opens nothing')
-clock = clock + 1 core:recheck()
-check(mem.read_u32(eyeC.at) == eyeC.original, 'nothing is re-applied after a later zone-in')
-mem.write_u32(eyeC.at, eyeC.original)
-core:recheckNow()
-check(mem.read_u32(eyeC.at) == core:slotAddress('min'), 'recheckNow works outside the window')
-core:beginRecheckWindow(Core.RECHECK_AFTER_TOOL_CHANGE)         -- the host saw /load or /unload
-mem.write_u32(eyeC.at, eyeC.original)
-clock = clock + 1 core:recheck()
-check(mem.read_u32(eyeC.at) == core:slotAddress('min'), 'a tool load/unload opens a short window')
-clock = clock + Core.RECHECK_AFTER_TOOL_CHANGE
-check(not core:recheckActive(), 'the short window closes after ' .. Core.RECHECK_AFTER_TOOL_CHANGE .. ' seconds')
-core:beginRecheckWindow()
-core:beginRecheckWindow(Core.RECHECK_AFTER_TOOL_CHANGE)
-clock = clock + Core.RECHECK_AFTER_TOOL_CHANGE + 1
-check(core:recheckActive(), 'a short request does not cut a longer open window')
-clock = clock + Core.RECHECK_WINDOW
+local jz = siteByName(core, 'jitter push z')
+mem.write_u32(jz.at, jz.original)                               -- reverted, then an unloading tool restores our pointer
+core:refresh()
+mem.write_u32(jz.at, core:slotAddress('jitter'))
+core:refresh()
+check(jz.state == 'patched', 'a site holding our pointer again counts as ours, so unload restores it')
 
 -- ---------------------------------------------------------------- uninstall
 print('uninstall')
 local eyeA = siteByName(core, 'min distance: eye follow A')
 local stranger = mem.alloc(4)
-core:beginRecheckWindow()                                       -- inside a window the takeover is seen
 mem.write_u32(eyeA.at, stranger)                                -- someone else took eye follow A meanwhile
-clock = clock + 1 core:recheck()
+core:refresh()
 check(eyeA.state == 'foreign', 'a takeover at another value is reported as foreign')
 local eyeB = siteByName(core, 'min distance: eye follow B')
-mem.write_u32(eyeB.at, stranger)                                -- taken over after the last recheck pass
+mem.write_u32(eyeB.at, stranger)                                -- taken over after the last status refresh
 check(not core:uninstall(), 'uninstall reports the restore it had to refuse')
-check(eyeB.state == 'refused' and mem.read_u32(eyeB.at) == stranger, 'a site that changed since the last pass is refused, not overwritten')
+check(eyeB.state == 'refused' and mem.read_u32(eyeB.at) == stranger, 'a site that changed since the last refresh is refused, not overwritten')
 check(eyeA.state == 'foreign' and mem.read_u32(eyeA.at) == stranger, 'a known-foreign site is left alone without counting as refused')
-check(mem.read_u32(eyeC.at) == eyeC.original, 'a patched site is restored')
-check(mem.read_u32(jx.at) == jx.original, 'the retaken jitter site is restored')
+check(mem.read_u32(eyeC.at) == eyeC.original, 'a reverted site is left as the other tool set it')
+check(mem.read_u32(jz.at) == jz.original, 'a patched jitter site is restored')
+local eyeE = siteByName(core, 'min distance: eye follow E')
+check(eyeE.state == 'restored' and mem.read_u32(eyeE.at) == eyeE.original, 'an untouched site is restored')
 local refused = 0
 for _, r in ipairs(core:status()) do if r.state == 'refused' then refused = refused + 1 end end
 check(refused == 1, 'exactly one refused site')

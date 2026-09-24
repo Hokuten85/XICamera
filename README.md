@@ -72,10 +72,9 @@ A site another tool already changed is left alone and reported as
 `owned`, `neutral` or `foreign` in `/camera status` (and in the
 Ashita 4 settings window). TrueFPS shares the three jitter sites
 with XICamera and works in either load order: whichever tool reaches
-them first keeps them. For a minute after load and after the first
-world entry, and briefly after another addon or plugin loads or
-unloads, XICamera re-checks its sites and re-applies anything that
-was undone. See [`docs/TOOL_COMPAT_REVIEW.md`](docs/TOOL_COMPAT_REVIEW.md).
+them first keeps them. After load XICamera does not watch its sites:
+if another tool changes one later, XICamera lets it, and unload
+restores only what still holds XICamera's values. See [`docs/TOOL_COMPAT_REVIEW.md`](docs/TOOL_COMPAT_REVIEW.md).
 
 Works on retail and on private-server emulators (LSB / Topaz).
 There is no server-visible signal — XICamera emits no packets.

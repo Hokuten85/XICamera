@@ -4,9 +4,9 @@
 > `xicamera_core.lua` inverts the constant model (item 1), guards
 > every write and restore (2), never frees slots (3), recognises
 > foreign and owned sites (4), keeps per-site state with reasons (5),
-> re-checks once a second for a minute after install and after the
-> first world entry, and for 15 seconds after another addon or plugin
-> loads or unloads (6),
+> reports on request what other tools changed after load without
+> re-applying anything (6, deliberately reduced: XICamera lets other
+> tools win after load),
 > and no longer touches `.rdata` (8) or
 > assumes one original per group (9). The Windower 4 DLL writes with
 > locked exchanges and offers `compare_exchange_uint32` (7); the

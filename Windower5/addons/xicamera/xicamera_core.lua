@@ -23,12 +23,9 @@
       * Slots are never freed: another tool may have saved a slot address as "original" and will
         write it back after XICamera unloads.
       * A group of sites that must agree (every reader of one constant) installs all-or-none.
-      * recheck() re-applies a patch another tool reverted, retakes a neutral site whose owner
-        unloaded, and reports a takeover once. It runs once a second, and only inside a window:
-        the first minute after install, the first minute after the character first enters the
-        world following install (onEnterWorld; later zones open nothing), and a few seconds
-        after the host sees another addon or plugin load or unload (beginRecheckWindow). Outside
-        a window XICamera lives with whatever other tools do until it unloads.
+      * Nothing runs between load and unload. If another tool changes a site after XICamera
+        patched it, XICamera lets it. status() re-reads the sites (read-only) so the report says
+        what happened, and unload restores only the sites that still hold XICamera's pointer.
 ]]
 
 local Core = {}
@@ -89,8 +86,6 @@ Core.CAMERA_MANAGER_SIG = 'A1????????0594020000C39090909090A1????????8B4050C3'
 Core.CAMERA_MANAGER_OFF = 0x11
 
 Core.LOCK_NOPS = 0x9090
-Core.RECHECK_WINDOW = 60          -- seconds of once-a-second re-checks after install and after the first world entry
-Core.RECHECK_AFTER_TOOL_CHANGE = 15   -- seconds after the host sees another addon or plugin load or unload
 
 local function hexbyte(s, i) return tonumber(s:sub(i, i + 1), 16) end
 
@@ -111,7 +106,6 @@ end
       mem.alloc(size)               -> address, never freed by XICamera
       mem.log(text)                 -> one line to the chat log
       mem.image_base, mem.image_size (optional; derived from the PE header when absent)
-      mem.now()                     -> seconds (optional; os.time when absent)
 ]]
 function Core.new(mem)
     local self = setmetatable({}, Core)
@@ -125,9 +119,6 @@ function Core.new(mem)
     self.slots = {}
     self.groups = {}       -- slot -> { enabled = bool, why = text }
     self.installed = false
-    self.recheckUntil = 0  -- seconds; recheck() does nothing past this
-    self.lastRecheck = nil -- the second of the last pass
-    self.enteredWorld = false   -- onEnterWorld opens a window once
     self.lock = nil        -- { at, original }
     self.cameraManager = nil
     return self
@@ -368,7 +359,6 @@ function Core:install()
         if site.state == 'owned' or site.state == 'foreign' or site.state == 'missing' then self:logOnce(site, site.note) end
     end
     self.installed = true
-    self:beginRecheckWindow()
     return self:active()
 end
 
@@ -376,7 +366,7 @@ function Core:uninstall()
     if not self.installed then return true end
     local ok = true
     for _, site in ipairs(self.sites) do
-        if site.state == 'neutral' or site.state == 'foreign' or site.state == 'owned' then
+        if site.state == 'neutral' or site.state == 'foreign' or site.state == 'owned' or site.state == 'reverted' then
             self:log(site.name .. ': left as another tool set it')
         elseif not self:restoreSite(site) then
             ok = false
@@ -403,81 +393,33 @@ function Core:groupOn(name)
 end
 
 -- ---------------------------------------------------------------------------
--- re-check: once a second, for RECHECK_WINDOW seconds after install and after each zone-in
+-- refresh: read-only look at the sites, for status reports
 -- ---------------------------------------------------------------------------
 
-function Core:now()
-    if self.mem.now then return self.mem.now() end
-    return os.time()
-end
-
--- Opens a window. install() does this, and the host does it with RECHECK_AFTER_TOOL_CHANGE
--- when it sees another addon or plugin load or unload. A shorter request never cuts a window
--- that is already open longer.
-function Core:beginRecheckWindow(seconds)
-    local until_ = self:now() + (seconds or Core.RECHECK_WINDOW)
-    if until_ > self.recheckUntil then self.recheckUntil = until_ end
-    self.lastRecheck = nil
-end
-
--- The host calls this every time the character enters the world (zone-in packet / login).
--- Only the first time after install opens a window: later zones are not re-checked.
-function Core:onEnterWorld()
-    if self.enteredWorld then return false end
-    self.enteredWorld = true
-    self:beginRecheckWindow()
-    return true
-end
-
-function Core:recheckActive()
-    return self.installed and self:now() <= self.recheckUntil
-end
-
--- Call every frame; it does nothing outside the window and at most one pass per second inside it.
-function Core:recheck()
-    if not self.installed then return end
-    local now = self:now()
-    if now > self.recheckUntil or now == self.lastRecheck then return end
-    self.lastRecheck = now
-    self:recheckNow()
-end
-
--- One pass, unconditionally (Windower 5 runs this from its status command).
-function Core:recheckNow()
+-- Re-reads every site and updates its state to say what another tool did since load. Never
+-- writes: a site another tool changed stays the way that tool left it.
+function Core:refresh()
     if not self.installed then return end
     local mem = self.mem
     for _, site in ipairs(self.sites) do
-        local slot = self.slots[site.slot]
-        if site.state == 'patched' then
+        if site.at and site.state ~= 'missing' and site.state ~= 'skipped' and site.state ~= 'restored' then
+            local slot = self.slots[site.slot]
             if not self:headOk(site) then
-                self:setState(site, 'owned', 'another tool replaced this instruction after XICamera patched it')
-                self:logOnce(site, site.note)
+                if site.state == 'patched' then
+                    self:setState(site, 'owned', 'another tool replaced this instruction after XICamera patched it')
+                end
             else
                 local now = mem.read_u32(site.at)
-                if now ~= slot.addr then
+                if slot and now == slot.addr then
+                    if site.state ~= 'patched' then self:setState(site, 'patched', nil) end
+                elseif site.state == 'patched' then
                     if now == site.original then
-                        if self:swap32(site.at, site.original, slot.addr) then
-                            self:logOnce(site, 'another tool wrote the client\'s value back; patch re-applied')
-                        end
+                        self:setState(site, 'reverted', 'another tool put the client\'s value back; left as it is')
+                    elseif site.spec.want ~= nil and self:peekFloat(now) == site.spec.want then
+                        self:setState(site, 'neutral', 'another tool took this over at the value XICamera uses')
                     else
-                        local held = self:peekFloat(now)
-                        if site.spec.want ~= nil and held == site.spec.want then
-                            self:setState(site, 'neutral', 'another tool took this over at the value XICamera uses')
-                        else
-                            self:setState(site, 'foreign', 'another tool took this operand over')
-                        end
-                        self:logOnce(site, site.note)
+                        self:setState(site, 'foreign', 'another tool took this operand over')
                     end
-                end
-            end
-        elseif site.state == 'neutral' or site.state == 'foreign' then
-            -- the other tool wrote the client's own operand back: it unloaded, so take the site
-            if self:headOk(site) then
-                local now = mem.read_u32(site.at)
-                if self:inImage(now) and (not Core.REQUIRED_GROUPS[site.slot] or self:groupOn(site.slot)) then
-                    site.original = now
-                    if slot.original == nil then slot.original = mem.read_float(now) end
-                    if self:patchSite(site) then self:logOnce(site, 'the other tool handed it back; patched') end
                 end
             end
         end
@@ -578,8 +520,10 @@ end
 -- ---------------------------------------------------------------------------
 
 -- One row per site: { name, state, note }. States: patched, neutral, restored, missing, owned,
--- foreign, skipped, failed, refused, unresolved.
-function Core:status()
+-- foreign, reverted, skipped, failed, refused, unresolved. Pass refresh = true to re-read the
+-- sites first (read-only; see refresh).
+function Core:status(refresh)
+    if refresh then self:refresh() end
     local rows = {}
     for i, site in ipairs(self.sites) do
         rows[i] = { name = site.name, state = site.state, note = site.note, group = site.slot }

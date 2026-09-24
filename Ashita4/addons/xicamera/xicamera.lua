@@ -140,23 +140,8 @@ ashita.events.register('load', 'camera_load', function()
 	end
 end)
 
--- Commands that load or unload another addon or plugin. Every addon sees every command, so
--- this is where XICamera learns that the tools sharing its bytes may have changed.
-local function isToolChangeCommand(args)
-	local c = args[1]
-	if c == '/load' or c == '/unload' or c == '/reload' then return true end
-	if c == '/addon' or c == '/addons' then
-		return table.contains({'load', 'unload', 'reload', 'reloadall', 'unloadall'}, args[2])
-	end
-	return false
-end
-
 ashita.events.register('command', 'camera_command', function(e)
     local command_args = e.command:lower():args()
-    if isToolChangeCommand(command_args) then
-        core:beginRecheckWindow(Core.RECHECK_AFTER_TOOL_CHANGE)
-        return false
-    end
     if table.contains({'/camera', '/cam', '/xicamera', '/xicam'}, command_args[1]) then
         if (command_args[2] == nil or table.contains({'ui', 'settings'}, command_args[2])) then
             ui.is_open[1] = not ui.is_open[1]
@@ -265,7 +250,7 @@ ashita.events.register('command', 'camera_command', function(e)
 			print("-  battleRangeLocked: " .. tostring(configs.battleRangeLocked))
 			print("-  saveOnIncrement: " .. tostring(configs.saveOnIncrement))
 			print("-  autoCalcVertSpeed: " .. tostring(configs.autoCalcVertSpeed))
-			for _, site in ipairs(core:status()) do
+			for _, site in ipairs(core:status(true)) do
 				if site.state ~= 'patched' then
 					print(string.format("-  %s: %s%s", site.name, site.state, site.note and (' (' .. site.note .. ')') or ''))
 				end
@@ -315,10 +300,14 @@ local function applyDefaults()
 	update_settings()
 end
 
-local stateColors = { patched = okColor, restored = okColor, neutral = warnColor, skipped = warnColor }
+local stateColors = { patched = okColor, restored = okColor, neutral = warnColor, skipped = warnColor, reverted = warnColor }
 
 local function drawPatchStatus()
 	if not imgui.CollapsingHeader('Patch status') then return end
+	-- the list shows the state as of load or the last refresh; reading the sites is on request only
+	if imgui.Button('Refresh') then core:refresh() end
+	imgui.SameLine()
+	imgui.TextDisabled('re-reads the patch sites; changes nothing')
 	for _, g in ipairs(core:groupStatus()) do
 		if not g.enabled then
 			imgui.TextColored(g.required and badColor or warnColor, g.name .. ' group off: ' .. tostring(g.why))
@@ -435,17 +424,7 @@ local function drawSettingsWindow()
 	imgui.End()
 end
 
-ashita.events.register('d3d_present', 'camera_present', function()
-	core:recheck()
-	drawSettingsWindow()
-end)
-
--- 0x000A is the zone-in packet. The core re-checks its sites for a minute the first time the
--- character enters the world after the addon loaded; later zones are ignored.
-ashita.events.register('packet_in', 'camera_packet_in', function(e)
-	if e.id == 0x000A then core:onEnterWorld() end
-	return false
-end)
+ashita.events.register('d3d_present', 'camera_present', drawSettingsWindow)
 
 ----------------------------------------------------------------------------------------------------
 -- func: unload

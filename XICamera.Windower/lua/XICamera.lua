@@ -120,30 +120,6 @@ windower.register_event('load', function()
     applySettings()
 end)
 
--- Inside a re-check window the core re-applies patches another tool reverted and reports
--- takeovers, once a second. Windows open for a minute at install and the first time the
--- character enters the world after that, and for a few seconds when the user loads or
--- unloads another addon or plugin. Later zones open nothing.
-windower.register_event('prerender', function()
-    core:recheck()
-end)
-
-windower.register_event('login', 'zone change', function()
-    core:onEnterWorld()
-end)
-
--- Best effort: Windower 4 has no load/unload notification for other addons, so watch the
--- console commands the user types. `//lua load|unload|reload`, `//load`, `//unload`.
-local function watchToolChange(text)
-    if type(text) ~= 'string' then return end
-    local t = text:lower()
-    if t:match('^//lua%s+[lu]n?l?o?a?d') or t:match('^//lua%s+r') or t:match('^//load%s') or t:match('^//unload%s') then
-        core:beginRecheckWindow(Core.RECHECK_AFTER_TOOL_CHANGE)
-    end
-end
-windower.register_event('outgoing text', function(original) watchToolChange(original) end)
-windower.register_event('unhandled command', function(...) watchToolChange('//' .. table.concat({...}, ' ')) end)
-
 windower.register_event('unload', function()
     config.save(settings)
     core:uninstall()
@@ -257,7 +233,7 @@ windower.register_event('addon command', function(command, ...)
         native.chat(127, '-  battleRangeLocked: ' .. tostring(settings.battleRangeLocked))
         native.chat(127, '-  saveOnIncrement: ' .. tostring(settings.saveOnIncrement))
         native.chat(127, '-  autoCalcVertSpeed: ' .. tostring(settings.autoCalcVertSpeed))
-        for _, site in ipairs(core:status()) do
+        for _, site in ipairs(core:status(true)) do
             if site.state ~= 'patched' then
                 native.chat(127, string.format('-  %s: %s%s', site.name, site.state, site.note and (' (' .. site.note .. ')') or ''))
             end

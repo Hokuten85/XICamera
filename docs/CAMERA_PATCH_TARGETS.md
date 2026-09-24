@@ -108,16 +108,11 @@ Rules the core applies at every site (borrowed from TrueFPS):
   restored.
 - Slots are never freed. Another tool may have saved a slot address as
   the "original" and will write it back after XICamera unloads.
-- Inside a re-check window, once a second, `recheck()` re-applies a
-  patch another tool reverted, retakes a neutral site whose owner
-  unloaded, and reports a takeover once. Windows open for a minute at
-  install and again the first time the character enters the world
-  after that (packet 0x000A; later zones open nothing), and for 15
-  seconds when the host sees another addon or plugin load or unload (`/load`,
-  `/unload`, `/addon load|unload|reload` on Ashita; the console
-  commands on Windower 4). Outside a window nothing runs; XICamera
-  keeps itself clean at load and unload and otherwise lives with what
-  other tools do.
+- Nothing runs between load and unload. If another tool changes a
+  site after XICamera patched it, XICamera lets it. `status(true)`
+  re-reads the sites read-only so the report says what happened
+  (`reverted`, `neutral`, `foreign`, `owned`), and unload restores
+  only the sites still holding XICamera's slot.
 - The Windower 4 DLL swaps operands with a locked compare-exchange;
   the other hosts read, write and read back.
 

@@ -109,38 +109,8 @@ ashita.register_event('load', function()
 	applySettings()
 end)
 
-----------------------------------------------------------------------------------------------------
--- func: render
--- desc: Re-checks the patch sites once a second inside a re-check window (see xicamera_core.lua).
-----------------------------------------------------------------------------------------------------
-ashita.register_event('render', function()
-	core:recheck()
-end)
-
--- 0x000A is the zone-in packet. The core re-checks its sites for a minute the first time the
--- character enters the world after the addon loaded; later zones are ignored.
-ashita.register_event('incoming_packet', function(id, size, packet)
-	if id == 0x000A then core:onEnterWorld() end
-	return false
-end)
-
--- Commands that load or unload another addon or plugin: the tools sharing XICamera's bytes may
--- have changed, so re-check for a few seconds.
-local function isToolChangeCommand(args)
-	local c = args[1]
-	if c == '/load' or c == '/unload' or c == '/reload' then return true end
-	if c == '/addon' or c == '/addons' then
-		return table.hasvalue({'load', 'unload', 'reload', 'reloadall', 'unloadall'}, args[2])
-	end
-	return false
-end
-
 ashita.register_event('command', function(command, ntype)
     local command_args = command:lower():args()
-    if isToolChangeCommand(command_args) then
-        core:beginRecheckWindow(Core.RECHECK_AFTER_TOOL_CHANGE)
-        return false
-    end
     if table.hasvalue({'/camera', '/cam', '/xicamera', '/xicam'}, command_args[1]) then
         if table.hasvalue({'distance', 'd'}, command_args[2]) then
             if (tonumber(command_args[3])) then
@@ -247,7 +217,7 @@ ashita.register_event('command', function(command, ntype)
 			print("-  battleRangeLocked: " .. tostring(configs.battleRangeLocked))
 			print("-  saveOnIncrement: " .. tostring(configs.saveOnIncrement))
 			print("-  autoCalcVertSpeed: " .. tostring(configs.autoCalcVertSpeed))
-			for _, site in ipairs(core:status()) do
+			for _, site in ipairs(core:status(true)) do
 				if site.state ~= 'patched' then
 					print(string.format("-  %s: %s%s", site.name, site.state, site.note and (' (' .. site.note .. ')') or ''))
 				end

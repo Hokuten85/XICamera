@@ -11,7 +11,7 @@ Settings save per character under `config/addons/xicamera/`. To load it every ti
 
 ## Settings window
 
-`/cam` on its own, or `/cam ui`, opens a window with a slider or checkbox for every setting, a height-snap control, Save and Reset to defaults buttons, and a **Patch status** list that shows each patch site as `patched`, or why it is not.
+`/cam` on its own, or `/cam ui`, opens a window with a slider or checkbox for every setting, a height-snap control, Save and Reset to defaults buttons, and a **Patch status** list that shows each patch site as `patched`, or why it is not. Its Refresh button re-reads the sites without changing anything.
 
 ## In-Game commands
 
@@ -38,7 +38,7 @@ Settings save per character under `config/addons/xicamera/`. To load it every ti
 
 XICamera never overwrites the client's own constants; it points the camera code at floats it owns, and only while the bytes at each site are the ones it found. A site another tool already changed is left alone and shown in Patch status as `owned`, `neutral` or `foreign`. TrueFPS in particular is fine in either load order: whichever tool reaches the jitter sites first keeps them.
 
-For a minute after loading, and for a minute after the first time your character enters the world, XICamera re-checks its sites once a second and re-applies anything another tool undid. It also re-checks for a few seconds after you `/load`, `/unload` or `/addon load|unload` anything. After that it leaves things as they are until unload.
+Between load and unload XICamera does not watch its sites. If another tool changes one of them after XICamera loaded, XICamera leaves it that way. `/cam status` re-reads the sites and reports what changed, without writing anything, and unloading restores only the sites that still hold XICamera's own values.
 
 ## What changed in 0.8
 
