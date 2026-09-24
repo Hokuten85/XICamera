@@ -340,9 +340,11 @@ settings.save()
 
 -- Windower 5 currently has no first-class unload event, so we tie restore
 -- to the GC of a sentinel object: the addon environment is collected on
--- unload, which triggers the finalizer.
-local _gc_sentinel = ffi_new('int*')
-ffi.gc(_gc_sentinel, function()
+-- unload, which triggers the finalizer. It is kept in a global because a
+-- top-level local stops being a GC root once this chunk returns, and the
+-- finalizer would then undo the patches while the addon is still loaded.
+xicamera_unload_sentinel = ffi_new('int*')
+ffi.gc(xicamera_unload_sentinel, function()
     settings.save()
     core:uninstall()
 end)
