@@ -369,3 +369,6 @@ _camera_features_run.txt
 # release bundles built next to the addons (see tools/package_release.ps1; releases come from GitHub Actions)
 /Ashita*/addons/xicamera_*_addon_v*.zip
 /build/dist/
+
+# WindowerMemory downloads cached by tools/fetch_windowermemory.ps1
+/build/windowermemory/

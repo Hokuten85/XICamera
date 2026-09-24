@@ -86,9 +86,9 @@ XICamera/
 ├── Ashita3/               Ashita v3 lua addon (host + copy of the core)
 ├── Ashita4/               Ashita v4 lua addon (host + core + ImGui settings window)
 ├── Windower5/             Windower 5 lua addon (host + copy of the core)
-├── XICamera.Windower/     Windower 4: memory-primitive DLL + lua addon (host + copy of the core)
+├── Windower4/             Windower 4 lua addon (host + memory adapter + copy of the core)
 ├── XICamera.Core/         legacy C++ camera logic; no longer built by anything (safe to delete)
-├── 3rdParty/SDKs/         Windower lua SDK
+├── windowermemory.json    WindowerMemory release (and SHA-256) the Windower 4 zip ships
 ├── docs/                  Camera-internals reference + tool-compatibility review
 ├── tools/                 Release packaging, binary-analysis helpers, tools/test_core.lua
 └── XICamera.sln           Visual Studio solution
@@ -97,45 +97,40 @@ XICamera/
 Every port is lua: one shared `xicamera_core.lua` holds the site
 table and all patching rules, and each host supplies a small memory
 adapter plus settings and commands. On Windower 4 the adapter is
-backed by a DLL (`_XICamera.dll`) that exposes memory read, write,
-scan, allocation and an atomic compare-exchange to lua.
+backed by `_WindowerMemory.dll` from
+[WindowerMemory](https://github.com/Hokuten85/WindowerMemory), which
+exposes memory read, write, scan, allocation and an atomic
+compare-exchange to lua. XICamera doesn't build it; the release
+pinned in `windowermemory.json` is downloaded at packaging time.
 `tools/test_core.lua <unpacked FFXiMain image>` runs the core against
 the real client bytes without the game.
 
 ## Building
 
-**Prerequisites:** Visual Studio 2019 or 2022 with the
-"Desktop C++ Development" workload (v143 toolset),
-Windows 10 SDK. Only needed for the Windower 4 DLL; the lua
-addons need no build step.
+Nothing to compile: every port is lua. The Windower 4 port's
+`_WindowerMemory.dll` is built and released by
+[WindowerMemory](https://github.com/Hokuten85/WindowerMemory);
+`windowermemory.json` pins the release (version and SHA-256) this
+repo ships. To move to a newer one, change both fields together,
+taking the hash from that release's `SHA256SUMS.txt`.
 
-**Step 1 — drop the SDKs.** The Windower lua SDK headers are not
-redistributed here. Copy them into:
-
-```
-3rdParty/SDKs/Windower/LUA/             <- from Windower's LuaCore package
-3rdParty/SDKs/Windower/LuaCore_exports.lib
-```
-
-**Step 2 — build.** Open `XICamera.sln`, select `Release | Win32`,
-Build Solution. The Windower 4 project's post-build copies the
-DLL plus the lua addon into `build/Release/Windower/XICamera/`.
-
-**Step 3 — release zips (optional).** After a successful build:
+**Release zips.** With PowerShell 7:
 
 ```
-powershell -ExecutionPolicy Bypass -File tools\package_release.ps1
+pwsh -File tools\package_release.ps1
 ```
 
 Writes `build/dist/xicamera_<launcher>_addon_v<version>.zip` for
-each launcher plus `SHA256SUMS.txt` (the lua-only bundles don't
-need the build step; they're packed straight from the working
-tree). The version defaults to `addon.version` in the Ashita 4
-lua and can be overridden with `-Version 0.8.0`.
+each launcher plus `SHA256SUMS.txt`, packed straight from the
+working tree. For the Windower 4 zip, `tools/fetch_windowermemory.ps1`
+downloads the pinned `_WindowerMemory.dll`, refuses it if the hash
+differs, and caches it under `build/windowermemory/`. The version
+defaults to `addon.version` in the Ashita 4 lua and can be
+overridden with `-Version 0.8.0`.
 
 **Releases are cut by GitHub Actions.** Pushing a tag `v<version>`
-runs `.github/workflows/release.yml`, which builds the DLL, packages
-the four zips and publishes the release; a version with a suffix
+runs `.github/workflows/release.yml`, which packages the four zips
+and publishes the release; a version with a suffix
 (`v0.8.0-pre1`) is published as a pre-release, and an annotated
 tag's message becomes the release notes. The workflow can also be
 run by hand from the Actions tab with a version and a pre-release
@@ -157,11 +152,13 @@ switch. Bump `addon.version` in the four lua hosts and the Windower 5
 
 ### Windower 4
 
-1. Copy `build/Release/Windower/XICamera/` into
+1. Extract `xicamera_windower4_addon_v<version>.zip` into
    `<Windower>/addons/`. The addon dir should end up at
    `<Windower>/addons/XICamera/` containing `XICamera.lua`,
    `lib/xicamera_core.lua`, `lib/windower_native.lua`,
-   `libs/_XICamera.dll`, and a README.
+   `libs/_WindowerMemory.dll`, and a README. (From a checkout,
+   `Windower4/addons/XICamera/` plus the DLL from the pinned
+   WindowerMemory release in `libs/`.)
 2. In-game: `//lua load XICamera`.
 
 ### Windower 5

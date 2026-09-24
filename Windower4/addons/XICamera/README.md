@@ -4,10 +4,10 @@ XICamera for **Windower 4** changes the third-person camera: distance, battle di
 
 ## Setup
 
-1. Extract the zip into your Windower `addons` folder. You should end up with `addons/XICamera/` containing `XICamera.lua`, `lib/xicamera_core.lua`, `lib/windower_native.lua` and `libs/_XICamera.dll` (also present as `libs/_WindowerMemory.dll`).
+1. Extract the zip into your Windower `addons` folder. You should end up with `addons/XICamera/` containing `XICamera.lua`, `lib/xicamera_core.lua`, `lib/windower_native.lua` and `libs/_WindowerMemory.dll`. If you're upgrading, an old `libs/_XICamera.dll` can be deleted; nothing loads it any more.
 2. In game: `//lua load xicamera`.
 
-The DLL only provides memory primitives to Lua (scan, read, write, allocate, and an atomic compare-exchange); every camera decision is in the Lua files. Settings save to `addons/XICamera/data/settings.xml`:
+The DLL comes from [WindowerMemory](https://github.com/Hokuten85/WindowerMemory) and only provides memory primitives to Lua (scan, read, write, allocate, and an atomic compare-exchange); every camera decision is in the Lua files. Settings save to `addons/XICamera/data/settings.xml`:
 
 ```xml
 <?xml version="1.1" ?>
