@@ -4,8 +4,8 @@
 #  Triggers:
 #    * pushing a tag `v<version>`: the release is named after the tag, and is
 #      a pre-release when the version has a suffix (v0.8.0-pre1, v0.9.0-rc2).
-#      An annotated tag's message becomes the release notes; a plain tag gets
-#      GitHub's generated notes.
+#      An annotated tag's message is the release notes, as written: keep it to
+#      what changed for players. A plain tag gets GitHub's generated notes.
 #    * "Run workflow" with a version and a pre-release switch, for a release
 #      cut from any branch without tagging first (the tag is created for you).
 #
@@ -80,21 +80,7 @@ jobs:
           }
           if (-not $notes.Trim()) { "generate=true" >> $env:GITHUB_OUTPUT }
           else { "generate=false" >> $env:GITHUB_OUTPUT }
-          $body = @()
-          if ($notes.Trim()) { $body += $notes.Trim(); $body += '' }
-          $body += '## Downloads'
-          $body += ''
-          $body += '| Launcher | File | Install |'
-          $body += '|:--|:--|:--|'
-          $body += "| Ashita v4 | ``xicamera_ashita4_addon_v$env:V.zip`` | extract into ``<Ashita4>/addons/`` |"
-          $body += "| Ashita v3 | ``xicamera_ashita3_addon_v$env:V.zip`` | extract into ``<Ashita3>/addons/`` |"
-          $body += "| Windower 4 | ``xicamera_windower4_addon_v$env:V.zip`` | extract into ``<Windower>/addons/`` |"
-          $body += "| Windower 5 | ``xicamera_windower5_addon_v$env:V.zip`` | extract into ``<Windower5>/addons/`` |"
-          $body += ''
-          $body += 'Each zip holds the addon folder at its root. `SHA256SUMS.txt` lists the checksums.'
-          Set-Content -Path build/dist/NOTES.md -Value ($body -join "`n") -Encoding utf8
-        env:
-          V: ${{ steps.ver.outputs.version }}
+          Set-Content -Path build/dist/NOTES.md -Value $notes.Trim() -Encoding utf8
 
       - name: Publish
         shell: pwsh
