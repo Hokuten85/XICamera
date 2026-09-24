@@ -76,7 +76,12 @@ jobs:
           $tag = '${{ steps.ver.outputs.tag }}'
           $notes = ''
           if ('${{ github.event_name }}' -eq 'push') {
-            $notes = (git tag -l --format='%(contents)' $tag) -join "`n"
+            # actions/checkout can leave the tag as a lightweight ref, whose "contents" is the
+            # commit message; fetch the real tag object and use it only if it is annotated
+            git fetch --force origin "refs/tags/${tag}:refs/tags/${tag}" 2>$null
+            if ((git cat-file -t $tag) -eq 'tag') {
+              $notes = (git for-each-ref "refs/tags/$tag" --format='%(contents)') -join "`n"
+            }
           }
           if (-not $notes.Trim()) { "generate=true" >> $env:GITHUB_OUTPUT }
           else { "generate=false" >> $env:GITHUB_OUTPUT }
