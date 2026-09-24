@@ -18,7 +18,7 @@ do
     local function slurp(path) local h = io.open(path, 'rb') if not h then return nil end local s = h:read('*a') h:close() return s end
     local root = script .. '../'
     local master = slurp(root .. 'Ashita4/addons/xicamera/xicamera_core.lua')
-    for _, copy in ipairs({ 'Ashita3/addons/xicamera/xicamera_core.lua', 'XICamera.Windower/lua/lib/xicamera_core.lua', 'Windower5/addons/xicamera/xicamera_core.lua' }) do
+    for _, copy in ipairs({ 'Ashita3/addons/xicamera/xicamera_core.lua', 'Windower4/addons/XICamera/lib/xicamera_core.lua', 'Windower5/addons/xicamera/xicamera_core.lua' }) do
         if slurp(root .. copy) ~= master then
             io.stderr:write('core copy differs from Ashita4/addons/xicamera/xicamera_core.lua: ' .. copy .. '\n')
             os.exit(1)

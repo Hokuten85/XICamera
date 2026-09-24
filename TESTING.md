@@ -158,7 +158,7 @@ Causes of `missing`, in order of likelihood:
    was recompiled. Check `docs/CAMERA_PATCH_TARGETS.md` for the site,
    find the new bytes in an unpacked client image, and update the
    row in `Core.SITES` in `Ashita4/addons/xicamera/xicamera_core.lua`.
-   Copy that file verbatim to the Ashita 3, Windower 4 (`lua/lib/`)
+   Copy that file verbatim to the Ashita 3, Windower 4 (`Windower4/addons/XICamera/lib/`)
    and Windower 5 folders; `tools/test_core.lua <image>` checks the
    copies match and exercises every site against the image.
 2. **Another tool rewrote the bytes the signature covers.** Signatures

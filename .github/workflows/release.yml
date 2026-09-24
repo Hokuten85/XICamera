@@ -1,5 +1,6 @@
-#  Builds the Windower 4 DLL, packages the four launcher bundles and publishes
-#  a GitHub release.
+#  Packages the four launcher bundles and publishes a GitHub release. The
+#  Windower 4 bundle's _WindowerMemory.dll comes from the WindowerMemory release
+#  pinned in windowermemory.json (https://github.com/Hokuten85/WindowerMemory).
 #
 #  Triggers:
 #    * pushing a tag `v<version>`: the release is named after the tag, and is
@@ -42,15 +43,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: microsoft/setup-msbuild@v2
-
-      - name: Build the Windower 4 DLL (Release, Win32)
-        shell: pwsh
-        run: |
-          msbuild XICamera.Windower/XICamera.Windower.vcxproj `
-            -p:Configuration=Release -p:Platform=Win32 -p:PlatformToolset=v143 `
-            "-p:SolutionDir=$env:GITHUB_WORKSPACE\\" -m -v:minimal
-
       - name: Resolve version and release kind
         id: ver
         shell: pwsh
@@ -69,7 +61,7 @@ jobs:
 
       - name: Package the four bundles
         shell: pwsh
-        run: ./tools/package_release.ps1 -Version '${{ steps.ver.outputs.version }}' -Strict
+        run: ./tools/package_release.ps1 -Version '${{ steps.ver.outputs.version }}'
 
       - name: Release notes
         id: notes

@@ -8,30 +8,26 @@
 #     Ashita3/addons/xicamera/            ->  xicamera_ashita3_addon_v<ver>.zip    (xicamera/...)
 #     Ashita4/addons/xicamera/            ->  xicamera_ashita4_addon_v<ver>.zip    (xicamera/...)
 #     Windower5/addons/xicamera/          ->  xicamera_windower5_addon_v<ver>.zip  (xicamera/...)
-#     build\<cfg>\Windower\XICamera\      ->  xicamera_windower4_addon_v<ver>.zip  (XICamera/...)
+#     Windower4/addons/XICamera/          ->  xicamera_windower4_addon_v<ver>.zip  (XICamera/...)
 #
-#  Three bundles are pure Lua and pack straight from the working tree. The
-#  Windower 4 bundle needs the DLL, so a Release|Win32 build of
-#  XICamera.Windower must run first (its post-build assembles the folder).
+#  Every bundle packs straight from the working tree. The Windower 4 bundle
+#  also gets libs/_WindowerMemory.dll (and its license) from the WindowerMemory
+#  release pinned in windowermemory.json, downloaded and checked against the
+#  pinned SHA-256 by tools/fetch_windowermemory.ps1.
 #
 #  Output: build\dist\<zips> plus SHA256SUMS.txt.
 #
 #  Usage:
-#      powershell -ExecutionPolicy Bypass -File tools\package_release.ps1
-#      powershell -ExecutionPolicy Bypass -File tools\package_release.ps1 -Version 0.8.0
-#      powershell -ExecutionPolicy Bypass -File tools\package_release.ps1 -Version 0.8.0 -Strict
+#      pwsh -File tools\package_release.ps1
+#      pwsh -File tools\package_release.ps1 -Version 0.8.0
 #
 #  -Version defaults to addon.version in Ashita4/addons/xicamera/xicamera.lua.
-#  -Strict fails instead of skipping when the Windower 4 build tree is missing
-#  (CI uses it).
 # =============================================================================
 
 param(
-    [string]$Configuration = 'Release',
-    [string]$Version       = '',
-    [string]$RepoRoot      = (Resolve-Path (Join-Path $PSScriptRoot '..')),
-    [string]$OutDir        = '',
-    [switch]$Strict
+    [string]$Version  = '',
+    [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')),
+    [string]$OutDir   = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -48,7 +44,9 @@ $Version = $Version.TrimStart('v', 'V')
 if (-not $OutDir) { $OutDir = Join-Path $RepoRoot 'build\dist' }
 New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
 
-Write-Host "Packaging XICamera $Version ($Configuration) -> $OutDir" -ForegroundColor Cyan
+Write-Host "Packaging XICamera $Version -> $OutDir" -ForegroundColor Cyan
+
+$wm = & (Join-Path $PSScriptRoot 'fetch_windowermemory.ps1') -RepoRoot $RepoRoot
 
 # ---- the four bundles --------------------------------------------------------
 
@@ -56,12 +54,13 @@ $bundles = @(
     @{ Tag = 'ashita3';   Source = Join-Path $RepoRoot 'Ashita3\addons\xicamera';                       Required = @('xicamera.lua', 'xicamera_core.lua', 'README.md') },
     @{ Tag = 'ashita4';   Source = Join-Path $RepoRoot 'Ashita4\addons\xicamera';                       Required = @('xicamera.lua', 'xicamera_core.lua', 'README.md') },
     @{ Tag = 'windower5'; Source = Join-Path $RepoRoot 'Windower5\addons\xicamera';                     Required = @('xicamera.lua', 'xicamera_core.lua', 'manifest.xml', 'README.md') },
-    @{ Tag = 'windower4'; Source = Join-Path $RepoRoot "build\$Configuration\Windower\XICamera";        Required = @('XICamera.lua', 'lib\xicamera_core.lua', 'lib\windower_native.lua', 'libs\_XICamera.dll', 'libs\_WindowerMemory.dll', 'README.md'); NeedsBuild = $true }
+    @{ Tag = 'windower4'; Source = Join-Path $RepoRoot 'Windower4\addons\XICamera';                     Required = @('XICamera.lua', 'lib\xicamera_core.lua', 'lib\windower_native.lua', 'README.md')
+       Extra = @{ 'libs\_WindowerMemory.dll' = Join-Path $wm '_WindowerMemory.dll'; 'libs\WindowerMemory-LICENSE.txt' = Join-Path $wm 'LICENSE.txt' } }
 )
 
 # The shared core must be byte-identical in every port; refuse to ship a drifted copy.
 $master = Get-Content (Join-Path $RepoRoot 'Ashita4\addons\xicamera\xicamera_core.lua') -Raw
-foreach ($copy in @('Ashita3\addons\xicamera\xicamera_core.lua', 'Windower5\addons\xicamera\xicamera_core.lua', 'XICamera.Windower\lua\lib\xicamera_core.lua')) {
+foreach ($copy in @('Ashita3\addons\xicamera\xicamera_core.lua', 'Windower5\addons\xicamera\xicamera_core.lua', 'Windower4\addons\XICamera\lib\xicamera_core.lua')) {
     if ((Get-Content (Join-Path $RepoRoot $copy) -Raw) -ne $master) {
         throw "xicamera_core.lua differs from the Ashita 4 copy: $copy"
     }
@@ -75,10 +74,7 @@ foreach ($b in $bundles) {
     $missing = @($b.Required | Where-Object { -not (Test-Path (Join-Path $b.Source $_)) })
     if (-not (Test-Path $b.Source) -or $missing.Count -gt 0) {
         $why = if (-not (Test-Path $b.Source)) { "$($b.Source) not found" } else { "missing: $($missing -join ', ')" }
-        if ($b.NeedsBuild) { $why += " (run a $Configuration|Win32 build of XICamera.Windower first)" }
-        if ($Strict) { throw "cannot package $($b.Tag): $why" }
-        Write-Warning "  skip $($b.Tag): $why"
-        continue
+        throw "cannot package $($b.Tag): $why"
     }
 
     if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
@@ -89,6 +85,13 @@ foreach ($b in $bundles) {
     New-Item -ItemType Directory -Path $folder -Force | Out-Null
     Copy-Item -Path (Join-Path $b.Source '*') -Destination $folder -Recurse -Force
     Get-ChildItem $folder -Recurse -Include '*.zip', '*.pdb', '*.ilk', '*.exp', '*.lib', 'Thumbs.db', '.DS_Store' | Remove-Item -Force
+    if ($b.Extra) {
+        foreach ($to in $b.Extra.Keys) {
+            $dest = Join-Path $folder $to
+            New-Item -ItemType Directory -Path (Split-Path $dest) -Force | Out-Null
+            Copy-Item $b.Extra[$to] $dest -Force
+        }
+    }
 
     Write-Host ("  -> {0}" -f $zipName)
     Compress-Archive -Path $folder -DestinationPath $zipPath -CompressionLevel Optimal
