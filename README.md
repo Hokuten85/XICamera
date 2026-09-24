@@ -17,13 +17,15 @@ camera obeys you instead of stock SE defaults.
 
 ## Quick start
 
-1. **Download or build** the zip for your launcher:
-   - `XICamera-Ashita3-<version>.zip` (Ashita v3 lua addon)
-   - `XICamera-Ashita4-<version>.zip` (Ashita v4 lua addon)
-   - `XICamera-Windower-<version>.zip` (Windower 4 DLL + lua addon)
-   - `XICamera-Windower5-<version>.zip` (Windower 5 lua addon)
-2. **Extract** the zip and merge its contents into your launcher's
-   addons tree. The zip already has the right directory shape.
+1. **Download** the zip for your launcher from the
+   [releases page](https://github.com/Hokuten85/XICamera/releases):
+   - `xicamera_ashita4_addon_v<version>.zip` (Ashita v4)
+   - `xicamera_ashita3_addon_v<version>.zip` (Ashita v3)
+   - `xicamera_windower4_addon_v<version>.zip` (Windower 4, DLL + lua)
+   - `xicamera_windower5_addon_v<version>.zip` (Windower 5)
+2. **Extract** the zip into your launcher's `addons` folder. Each
+   zip holds the addon folder at its root, so it lands as
+   `addons/xicamera/` (`addons/XICamera/` on Windower 4).
 3. **Launch the game**, log in, and load your character. Chat
    commands only work once you're in-world.
 4. **Verify** with `/camera status` (Ashita) or `//camera status`
@@ -58,15 +60,22 @@ own settings facility (Ashita config dir, Windower data/settings.xml).
 
 ## Compatibility
 
-XICamera does not detour any FFXi function. It only edits 12
-specific data sites in `FFXiMain.dll`. Every patch is reverted on
-unload. There's nothing it routinely contends with.
+XICamera does not detour any FFXi function and never writes the
+client's own constants. It allocates its own floats and re-points
+24 operands in the camera code at them, each only while the bytes
+at that site are the ones it found at load, and it restores each
+only while the site still holds its pointer. Everything is reverted
+on unload.
 
-The one place to be careful: another addon that *also* patches
-camera distance / pan speed / jitter at the same data sites will
-race XICamera (whichever one writes second wins). XIPivot, View
-Tweaks, and similar addons that touch unrelated subsystems are
-unaffected.
+Other tools that touch the same bytes are handled rather than raced.
+A site another tool already changed is left alone and reported as
+`owned`, `neutral` or `foreign` in `/camera status` (and in the
+Ashita 4 settings window). TrueFPS shares the three jitter sites
+with XICamera and works in either load order: whichever tool reaches
+them first keeps them. For a minute after load and after the first
+world entry, and briefly after another addon or plugin loads or
+unloads, XICamera re-checks its sites and re-applies anything that
+was undone. See [`docs/TOOL_COMPAT_REVIEW.md`](docs/TOOL_COMPAT_REVIEW.md).
 
 Works on retail and on private-server emulators (LSB / Topaz).
 There is no server-visible signal — XICamera emits no packets.
@@ -121,11 +130,20 @@ DLL plus the lua addon into `build/Release/Windower/XICamera/`.
 powershell -ExecutionPolicy Bypass -File tools\package_release.ps1
 ```
 
-Writes `build/Release/dist/XICamera-<launcher>-<version>.zip` for
-each launcher (the lua-only bundles don't need the build step;
-they're packed straight from the working tree). Version is auto-
-detected from `git describe --tags` or can be overridden with
-`-Version 0.8`.
+Writes `build/dist/xicamera_<launcher>_addon_v<version>.zip` for
+each launcher plus `SHA256SUMS.txt` (the lua-only bundles don't
+need the build step; they're packed straight from the working
+tree). The version defaults to `addon.version` in the Ashita 4
+lua and can be overridden with `-Version 0.8.0`.
+
+**Releases are cut by GitHub Actions.** Pushing a tag `v<version>`
+runs `.github/workflows/release.yml`, which builds the DLL, packages
+the four zips and publishes the release; a version with a suffix
+(`v0.8.0-pre1`) is published as a pre-release, and an annotated
+tag's message becomes the release notes. The workflow can also be
+run by hand from the Actions tab with a version and a pre-release
+switch. Bump `addon.version` in the four lua hosts and the Windower 5
+`manifest.xml` before tagging.
 
 ## Installing
 
@@ -137,15 +155,15 @@ detected from `git describe --tags` or can be overridden with
 ### Ashita v4
 
 1. Copy `Ashita4/addons/xicamera/` into `<Ashita4>/addons/xicamera/`.
-2. (Optional) Copy `Ashita4/config/xicamera.ini` into
-   `<Ashita4>/config/xicamera/xicamera.ini`.
-3. In-game: `/addon load xicamera`.
+2. In-game: `/addon load xicamera`. `/cam ui` opens the settings
+   window; settings save per character under `config/addons/xicamera/`.
 
 ### Windower 4
 
 1. Copy `build/Release/Windower/XICamera/` into
    `<Windower>/addons/`. The addon dir should end up at
    `<Windower>/addons/XICamera/` containing `XICamera.lua`,
+   `lib/xicamera_core.lua`, `lib/windower_native.lua`,
    `libs/_XICamera.dll`, and a README.
 2. In-game: `//lua load XICamera`.
 
@@ -165,8 +183,11 @@ Camera internals and patch sites are documented under [`docs/`](docs/):
 - [`CLIENT_BEHAVIOR.md`](docs/CLIENT_BEHAVIOR.md) — how stock FFXi
   computes camera state; what each value does.
 - [`CAMERA_PATCH_TARGETS.md`](docs/CAMERA_PATCH_TARGETS.md) — the
-  12 signatures + per-feature notes; required reading before
-  updating any signature.
+  24 patch sites, their signatures and groups; required reading
+  before updating any signature.
+- [`TOOL_COMPAT_REVIEW.md`](docs/TOOL_COMPAT_REVIEW.md) — why the
+  0.8 model exists: the pooled-constant problem and how XICamera
+  coexists with TrueFPS and similar tools.
 
 [`TESTING.md`](TESTING.md) covers the in-game verification
 procedure for each feature.
@@ -190,10 +211,13 @@ data loss.
 
 ## Status
 
-Stable. The mechanism (data overwrites + pointer rewrites) is
-simple enough that it either works or it logs a clear error and
-stays out of the way. Signature updates for new client versions
-are a one-line change in each of the four implementations; see
+0.8 is a pre-release: the patch model changed from overwriting
+constants to re-pointing operands, and it has been verified against
+an unpacked client image (`tools/test_core.lua`) but needs time in
+game across launchers. The mechanism is simple enough that it either
+works or it reports which site is not in and stays out of the way.
+Signature updates for new client versions are a one-row change in
+the shared `xicamera_core.lua`, copied to the four ports; see
 [`docs/CAMERA_PATCH_TARGETS.md`](docs/CAMERA_PATCH_TARGETS.md) for
 the derivation process.
 

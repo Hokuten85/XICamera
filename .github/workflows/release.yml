@@ -1,0 +1,111 @@
+#  Builds the Windower 4 DLL, packages the four launcher bundles and publishes
+#  a GitHub release.
+#
+#  Triggers:
+#    * pushing a tag `v<version>`: the release is named after the tag, and is
+#      a pre-release when the version has a suffix (v0.8.0-pre1, v0.9.0-rc2).
+#      An annotated tag's message becomes the release notes; a plain tag gets
+#      GitHub's generated notes.
+#    * "Run workflow" with a version and a pre-release switch, for a release
+#      cut from any branch without tagging first (the tag is created for you).
+#
+#  The Lua bundles pack straight from the tree, so the version people see
+#  in-game is addon.version in the Lua files; keep it in step with the tag.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version without the v, e.g. 0.8.0-pre1'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as a pre-release'
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Build the Windower 4 DLL (Release, Win32)
+        shell: pwsh
+        run: |
+          msbuild XICamera.Windower/XICamera.Windower.vcxproj `
+            -p:Configuration=Release -p:Platform=Win32 -p:PlatformToolset=v143 `
+            "-p:SolutionDir=$env:GITHUB_WORKSPACE\\" -m -v:minimal
+
+      - name: Resolve version and release kind
+        id: ver
+        shell: pwsh
+        run: |
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            $version = '${{ inputs.version }}'.TrimStart('v')
+            $pre = '${{ inputs.prerelease }}' -eq 'true'
+          } else {
+            $version = '${{ github.ref_name }}'.TrimStart('v')
+            $pre = $version -match '-'
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+          "prerelease=$($pre.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          Write-Host "version $version, pre-release: $pre"
+
+      - name: Package the four bundles
+        shell: pwsh
+        run: ./tools/package_release.ps1 -Version '${{ steps.ver.outputs.version }}' -Strict
+
+      - name: Release notes
+        id: notes
+        shell: pwsh
+        run: |
+          $tag = '${{ steps.ver.outputs.tag }}'
+          $notes = ''
+          if ('${{ github.event_name }}' -eq 'push') {
+            $notes = (git tag -l --format='%(contents)' $tag) -join "`n"
+          }
+          if (-not $notes.Trim()) { "generate=true" >> $env:GITHUB_OUTPUT }
+          else { "generate=false" >> $env:GITHUB_OUTPUT }
+          $body = @()
+          if ($notes.Trim()) { $body += $notes.Trim(); $body += '' }
+          $body += '## Downloads'
+          $body += ''
+          $body += '| Launcher | File | Install |'
+          $body += '|:--|:--|:--|'
+          $body += "| Ashita v4 | ``xicamera_ashita4_addon_v$env:V.zip`` | extract into ``<Ashita4>/addons/`` |"
+          $body += "| Ashita v3 | ``xicamera_ashita3_addon_v$env:V.zip`` | extract into ``<Ashita3>/addons/`` |"
+          $body += "| Windower 4 | ``xicamera_windower4_addon_v$env:V.zip`` | extract into ``<Windower>/addons/`` |"
+          $body += "| Windower 5 | ``xicamera_windower5_addon_v$env:V.zip`` | extract into ``<Windower5>/addons/`` |"
+          $body += ''
+          $body += 'Each zip holds the addon folder at its root. `SHA256SUMS.txt` lists the checksums.'
+          Set-Content -Path build/dist/NOTES.md -Value ($body -join "`n") -Encoding utf8
+        env:
+          V: ${{ steps.ver.outputs.version }}
+
+      - name: Publish
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = '${{ steps.ver.outputs.tag }}'
+          $args = @('release', 'create', $tag, '--title', "XICamera v${{ steps.ver.outputs.version }}", '--notes-file', 'build/dist/NOTES.md')
+          if ('${{ steps.ver.outputs.prerelease }}' -eq 'true') { $args += '--prerelease' }
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch') { $args += @('--target', '${{ github.sha }}') }
+          if ('${{ steps.notes.outputs.generate }}' -eq 'true') { $args += '--generate-notes' }
+          $args += Get-ChildItem build/dist/*.zip | ForEach-Object { $_.FullName }
+          $args += 'build/dist/SHA256SUMS.txt'
+          gh @args

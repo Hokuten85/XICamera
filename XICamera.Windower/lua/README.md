@@ -1,56 +1,59 @@
 ## About
 
-XICamera is an addon that allows to change the camera distance.
+XICamera for **Windower 4** changes the third-person camera: distance, battle distance, pan speeds, battle camera range and lock, a one-shot height snap, and removal of the camera jitter against walls.
 
 ## Setup
 
-- 1) Copy the XICamera folder into your Windower addons folder.
-- 2) (Optional) Edit `data/settings.xml`:
-   - change the default camera distance. Camera and Battle distance will be defaulted to 6 and 8.2 if no setting is specified.
+1. Extract the zip into your Windower `addons` folder. You should end up with `addons/XICamera/` containing `XICamera.lua`, `lib/xicamera_core.lua`, `lib/windower_native.lua` and `libs/_XICamera.dll` (also present as `libs/_WindowerMemory.dll`).
+2. In game: `//lua load xicamera`.
 
-The Windower build includes `libs/_WindowerMemory.dll`, a small Lua C module
-that exposes a generic memory namespace for Windower addons.
-`XICamera.lua` uses that generic memory layer for all process scans, reads,
-writes, allocation, and unload restoration; camera-specific behavior remains
-in Lua.
-
-settings.xml:
+The DLL only provides memory primitives to Lua (scan, read, write, allocate, and an atomic compare-exchange); every camera decision is in the Lua files. Settings save to `addons/XICamera/data/settings.xml`:
 
 ```xml
 <?xml version="1.1" ?>
 <settings>
     <global>
-	<cameraDistance>6</cameraDistance>
-	<battleDistance>8.2</battleDistance>
-	<horizontalPanSpeed>3</horizontalPanSpeed>
-	<verticalPanSpeed>10.7</verticalPanSpeed>
+        <cameraDistance>6</cameraDistance>
+        <battleDistance>8.2</battleDistance>
+        <horizontalPanSpeed>3</horizontalPanSpeed>
+        <verticalPanSpeed>10.7</verticalPanSpeed>
+        <battleRange>4</battleRange>
+        <battleRangeLocked>true</battleRangeLocked>
+        <autoCalcVertSpeed>true</autoCalcVertSpeed>
+        <saveOnIncrement>false</saveOnIncrement>
     </global>
 </settings>
 ```
 
 ## In-Game commands
 
-XICamera makes the in-game command `//camera` or `//cam` available to adjust camera distance on the fly.
-The following parameters are supported:
+`//camera`, `//cam`, `//xicamera` and `//xicam` all work. Parameters:
 
-- d/distance #           -- will change the camera distance - default: 6
-- b/battle #             -- will change the battle camera distance - default: 8
-- hs/hspeed #            -- will change the horizontal panning speed - default: 3
-- vs/vspeed #            -- will change the vertical panning speed - default: 10, this forces auto calc off
-- vh/vheight #           -- snaps camera height to character/reference height plus #
-- in/incr		         -- will increment camera distance by 1
-- de/decr		         -- will decrement camera distance by 1
-- bin/bincr		         -- will increment battle camera distance by 1
-- bde/bdecr		         -- will decrement battle camera distance by 1
-- saveOnIncrement/soi    -- will toggle saving behavior on incr/decr - default: off
-- autoCalcVertSpeed/acv  -- Toggles Vertical pan speed autocalc - default: on
-- brange/br #            -- changes the battle camera movement range up to about 180 degrees around mob. default: 4, min: 0, max: 100.
-- battlelock/bl <on/off> -- allows battle camera to rotate 360 degrees around mob.
+- d/distance #           -- camera distance - default: 6
+- b/battle #             -- battle camera distance - default: 8.2
+- hs/hspeed #            -- horizontal panning speed - default: 3
+- vs/vspeed #            -- vertical panning speed - default: 10.7; turns auto calc off
+- vh/vheight #           -- snaps camera height to the reference height plus #
+- in/incr                -- camera distance +1
+- de/decr                -- camera distance -1
+- bin/bincr              -- battle camera distance +1
+- bde/bdecr              -- battle camera distance -1
+- saveOnIncrement/soi    -- toggles saving on incr/decr - default: off
+- autoCalcVertSpeed/acv  -- toggles vertical pan speed auto calc - default: on
+- brange/br #            -- battle camera movement range around the target, 0..100 - default: 4; turns the lock on
+- battlelock/bl <on/off> -- off lets the battle camera rotate 360 degrees around the target
 - h/help                 -- print help text
-- s/status               -- print status
+- s/status               -- print status, including any patch site that is not in
 
-These commands all support a short version (d/b/h/s/hs/vs).
-Changes made with distance will be reflected in `settings.xml`.
+## Running next to other tools
+
+XICamera never overwrites the client's own constants; it points the camera code at floats it owns, and only while the bytes at each site are the ones it found. A site another tool already changed is left alone and listed by `//cam status` as `owned`, `neutral` or `foreign`.
+
+For a minute after loading, and for a minute after the first time your character enters the world, XICamera re-checks its sites once a second and re-applies anything another tool undid. It also re-checks for a few seconds after you load or unload another addon or plugin from the console. After that it leaves things as they are until unload.
+
+## What changed in 0.8
+
+Earlier versions wrote the user's distance straight into the client's 3.0 and 6.0 constants. Those numbers are shared with unrelated code, including the clamp on the running-animation rate, which is where the "NPCs run strangely after logging in" reports came from. 0.8 leaves the constants untouched.
 
 ## Disclaimer
 

@@ -365,3 +365,7 @@ _jitter_analysis_run.txt
 # Claude Code agent state
 /.claude/
 _camera_features_run.txt
+
+# release bundles built next to the addons (see tools/package_release.ps1; releases come from GitHub Actions)
+/Ashita*/addons/xicamera_*_addon_v*.zip
+/build/dist/
