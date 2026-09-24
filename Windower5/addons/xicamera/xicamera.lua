@@ -1,333 +1,356 @@
-local account = require('account')
-local chat = require('core.chat')
-local command = require('core.command')
-local ffi = require('ffi')
-local io = require('io')
-local math = require('math')
-local memory = require('memory')
-local player = require('player')
-local scanner = require('core.scanner')
-local settings = require('settings')
-local struct_lib = require('struct')
-local windower = require('core.windower')
-local win32 = require('win32')
-local enumerable = require('enumerable')
+--[[
+    XICamera — Windower 5 addon
 
-local ffi_new = ffi.new
-local ffi_gc = ffi.gc
-local ffi_cast = ffi.cast
-local ffi_C = ffi.C
-local add_text = chat.add_text
-local ptr = struct_lib.ptr
-local struct = struct_lib.struct
-local float = struct_lib.float
-local uint32 = struct_lib.uint32
-local bool = struct_lib.bool
+    Adjusts camera distance, pan speed, jitter, battle range, and the
+    battle-camera lock by patching FFXiMain.dll. The patch logic is the
+    shared xicamera_core.lua next to this file; this file supplies the
+    Windower 5 memory adapter, settings and commands.
+]]
 
-local HeapAlloc = win32.def({
-    name = 'HeapAlloc',
-    returns = 'void*',
-    parameters = {
-        'void*',
-        'uint32_t',
-        'size_t'
-    },
-    failure = false
-})
-local HeapFree = win32.def({
-    name = 'HeapFree',
+local chat       = require('core.chat')
+local command    = require('core.command')
+local ffi        = require('ffi')
+local scanner    = require('core.scanner')
+local settings   = require('settings')
+local win32      = require('win32')
+local Core       = require('xicamera_core')
+
+local ffi_new   = ffi.new
+local ffi_cast  = ffi.cast
+local add_text  = chat.add_text
+
+-- ---------------------------------------------------------------------------
+-- Win32 imports for page protection and the float block.
+-- ---------------------------------------------------------------------------
+
+local VirtualProtect = win32.def({
+    name = 'VirtualProtect',
     returns = 'bool',
-    parameters = {
-        'void*',
-        'uint32_t',
-        'void*'
-    },
+    parameters = { 'void*', 'size_t', 'DWORD', 'PDWORD' },
     failure = false
 })
 local HeapCreate = win32.def({
     name = 'HeapCreate',
     returns = 'void*',
-    parameters = {
-        'uint32_t',
-        'size_t',
-        'size_t'
-    },
+    parameters = { 'uint32_t', 'size_t', 'size_t' },
     failure = false
 })
-local HeapDestroy = win32.def({
-    name = 'HeapDestroy',
-    returns = 'bool',
-    parameters = {
-        'void*'
-    },
+local HeapAlloc = win32.def({
+    name = 'HeapAlloc',
+    returns = 'void*',
+    parameters = { 'void*', 'uint32_t', 'size_t' },
     failure = false
 })
-local VirtualProtect = win32.def({
-    name = 'VirtualProtect',
-    returns = 'bool',
-    parameters = {
-        'void*',
-        'size_t',
-        'DWORD',
-        'PDWORD'
-    },
+local GetModuleHandleA = win32.def({
+    name = 'GetModuleHandleA',
+    returns = 'void*',
+    parameters = { 'const char*' },
     failure = false
 })
 
+local PAGE_EXECUTE_READWRITE = 0x40
+
+-- The block that holds XICamera's floats. Other tools may keep pointers into it after this
+-- addon unloads, so the heap is created once per process and never destroyed.
+local cave_heap = HeapCreate(0x40000, 0, 0)
+
+local function addressOf(p)
+    if p == nil then return 0 end
+    return tonumber(ffi_cast('uintptr_t', p))
+end
+
+-- Writes go through a temporary RWX window on the page and restore the old protection.
+local function protectedWrite(address, size, fn)
+    local old = ffi_new('DWORD[1]')
+    local p = ffi_cast('void*', address)
+    VirtualProtect(p, size, PAGE_EXECUTE_READWRITE, old)
+    fn()
+    local ignored = ffi_new('DWORD[1]')
+    VirtualProtect(p, size, old[0], ignored)
+end
+
+local mem = {
+    find = function(sig)
+        local p = scanner.scan(sig)
+        return addressOf(p)
+    end,
+    read_u16    = function(a) return ffi_cast('uint16_t*', a)[0] end,
+    read_u32    = function(a) return tonumber(ffi_cast('uint32_t*', a)[0]) end,
+    read_float  = function(a) return ffi_cast('float*', a)[0] end,
+    write_u16   = function(a, v) protectedWrite(a, 2, function() ffi_cast('uint16_t*', a)[0] = v end) end,
+    write_u32   = function(a, v) protectedWrite(a, 4, function() ffi_cast('uint32_t*', a)[0] = v end) end,
+    write_float = function(a, v) protectedWrite(a, 4, function() ffi_cast('float*', a)[0] = v end) end,
+    alloc       = function(size) return addressOf(HeapAlloc(cave_heap, 8, size)) end,   -- HEAP_ZERO_MEMORY
+    log         = function(text) add_text('[xicamera] ' .. text) end,
+}
+do
+    local module = GetModuleHandleA('FFXiMain.dll')
+    local base = addressOf(module)
+    if base ~= 0 then
+        local lfanew = mem.read_u32(base + 0x3C)
+        mem.image_base = base
+        mem.image_size = mem.read_u32(base + lfanew + 0x50)
+    end
+end
+
+local core = Core.new(mem)
+
+-- ---------------------------------------------------------------------------
+-- Settings
+-- ---------------------------------------------------------------------------
+
 local defaults = {
-    distance = 6,
-    cameraSpeed = 1.0,
-    battleDistance = 8.2
+    distance           = 6.0,
+    battleDistance     = 8.2,
+    battleRange        = 4.0,
+    horizontalPanSpeed = 3.0,
+    verticalPanSpeed   = 10.7,
+    saveOnIncrement    = false,
+    autoCalcVertSpeed  = true,
+    battleRangeLocked  = true,
 }
 local options = settings.load(defaults)
 
-local minDistance
-local originalMinDistance
-local maxDistance
-local originalMaxDistance
-local minBattleDistance
-local originalMinBattleDistance
-local maxBattleDistance
-local originalMaxBattleDistance
-local zoomOnZoneInSetup
-local walkAnimation
-local npcWalkAnimation
-local battleSound
+-- ---------------------------------------------------------------------------
+-- Mutators (mirror the Ashita 4 lua addon's surface)
+-- ---------------------------------------------------------------------------
 
-local setCameraDistance = function(newDistance)
-	options.distance = newDistance
-	minDistance.val = newDistance - (originalMaxDistance - originalMinDistance)
-	maxDistance.val = newDistance
+local function setHorizontalPanSpeed(newSpeed)
+    options.horizontalPanSpeed = newSpeed
+    core:setHorizontalPanSpeed(newSpeed)
 end
 
-local setBattleCameraDistance = function(newDistance)
-	options.battleDistance = newDistance
-	minBattleDistance.val = newDistance - (originalMaxBattleDistance - originalMinBattleDistance)
-	maxBattleDistance.val = newDistance
+local function setVerticalPanSpeed(newSpeed)
+    options.verticalPanSpeed = newSpeed
+    core:setVerticalPanSpeed(newSpeed)
 end
 
---###################################################
---# SET UP Camera Speed Adjustment
---###################################################
-local originalValues = {
-    0xD8, 0x4C, 0x24, 0x24, -- fmul dword ptr [esp+24]
-    0x8B, 0x16, -- mov edx,[esi]
+local function setCameraDistance(newDistance)
+    options.distance = newDistance
+    core:setCameraDistance(newDistance)
+    if options.autoCalcVertSpeed then
+        setVerticalPanSpeed(defaults.verticalPanSpeed * newDistance / 6.0)
+    end
+end
+
+local function setBattleCameraDistance(newDistance)
+    options.battleDistance = newDistance
+    core:setBattleDistance(newDistance)
+end
+
+local function setBattleCameraRange(newRange)
+    options.battleRange = math.min(math.max(0, tonumber(newRange) or 0), 100)
+    core:setBattleRange(options.battleRange)
+end
+
+local function setBattleRangeLock(isLocked)
+    options.battleRangeLocked = isLocked
+    core:setBattleRangeLock(isLocked)
+end
+
+local function applyAll()
+    setCameraDistance(options.distance)
+    setBattleCameraDistance(options.battleDistance)
+    setHorizontalPanSpeed(options.horizontalPanSpeed)
+    if not options.autoCalcVertSpeed then
+        setVerticalPanSpeed(options.verticalPanSpeed)
+    end
+    setBattleCameraRange(options.battleRange)
+    setBattleRangeLock(options.battleRangeLocked)
+end
+
+-- ---------------------------------------------------------------------------
+-- Commands
+-- ---------------------------------------------------------------------------
+
+local function requireNumber(value, syntax)
+    local n = tonumber(value)
+    if n == nil then add_text('[xicamera] usage: ' .. syntax) end
+    return n
+end
+
+local function printStatus()
+    add_text('[xicamera] status')
+    add_text('  active: ' .. tostring(core:active()))
+    add_text('  cameraDistance: ' .. tostring(options.distance))
+    add_text('  battleDistance: ' .. tostring(options.battleDistance))
+    add_text('  battleRange: ' .. tostring(options.battleRange))
+    add_text('  horizontalPanSpeed: ' .. tostring(options.horizontalPanSpeed))
+    add_text('  verticalPanSpeed: ' .. tostring(options.verticalPanSpeed))
+    local cameraY, referenceY = core:cameraHeights()
+    if cameraY then
+        add_text(string.format('  cameraY: %.2f', cameraY))
+        add_text(string.format('  referenceY: %.2f', referenceY))
+    end
+    add_text('  battleRangeLocked: ' .. tostring(options.battleRangeLocked))
+    add_text('  saveOnIncrement: ' .. tostring(options.saveOnIncrement))
+    add_text('  autoCalcVertSpeed: ' .. tostring(options.autoCalcVertSpeed))
+    for _, site in ipairs(core:status(true)) do
+        if site.state ~= 'patched' then
+            add_text(string.format('  %s: %s%s', site.name, site.state, site.note and (' (' .. site.note .. ')') or ''))
+        end
+    end
+end
+
+local function printHelp()
+    add_text('[xicamera] commands (//camera, //cam, //xicamera, //xicam):')
+    add_text('  d|distance #        camera distance (default 6)')
+    add_text('  b|battle #          battle camera distance (default 8.2)')
+    add_text('  hs|hspeed #         horizontal pan speed (default 3)')
+    add_text('  vs|vspeed #         vertical pan speed (default 10.7); turns auto calc off')
+    add_text('  vh|vheight #        snap camera height to reference height plus #')
+    add_text('  br|brange #         battle camera range 0..100 (default 4); turns the lock on')
+    add_text('  bl|battlelock on|off  lock or unlock the battle camera range')
+    add_text('  in|incr, de|decr, bin|bincr, bde|bdecr   step the distances by 1')
+    add_text('  soi|saveOnIncrement  toggle saving on step commands')
+    add_text('  acv|autoCalcVertSpeed  toggle vertical pan speed auto calc')
+    add_text('  s|status            print status')
+end
+
+local function cmd_distance(arg)
+    local n = requireNumber(arg, 'distance <number>')
+    if n then setCameraDistance(n) settings.save() add_text('Distance changed to ' .. n) end
+end
+
+local function cmd_battle(arg)
+    local n = requireNumber(arg, 'battle <number>')
+    if n then setBattleCameraDistance(n) settings.save() add_text('Battle distance changed to ' .. n) end
+end
+
+local function cmd_hspeed(arg)
+    local n = requireNumber(arg, 'hspeed <number>')
+    if n then setHorizontalPanSpeed(n) settings.save() add_text('Horizontal pan speed changed to ' .. n) end
+end
+
+local function cmd_vspeed(arg)
+    local n = requireNumber(arg, 'vspeed <number>')
+    if n then
+        options.autoCalcVertSpeed = false
+        setVerticalPanSpeed(n) settings.save() add_text('Vertical pan speed changed to ' .. n)
+    end
+end
+
+local function cmd_vheight(arg)
+    local n = requireNumber(arg, 'vheight <offset>')
+    if not n then return end
+    local cameraY, referenceY = core:snapHeight(n)
+    if cameraY then
+        add_text(string.format('Camera height snapped to %.2f (reference %.2f + %.2f)', cameraY, referenceY, n))
+    else
+        add_text('[xicamera] WARN: camera task not available; vertical snap failed')
+    end
+end
+
+local function cmd_brange(arg)
+    local n = requireNumber(arg, 'brange <number>')
+    if n then
+        setBattleRangeLock(true) setBattleCameraRange(n) settings.save()
+        add_text('Battle camera range changed to ' .. options.battleRange)
+    end
+end
+
+local function cmd_battlelock(arg)
+    local v = tostring(arg):lower()
+    if v == 'on' or v == 'true' or v == '1' then
+        setBattleRangeLock(true) settings.save() add_text('Battle camera range locked.')
+    elseif v == 'off' or v == 'false' or v == '0' then
+        setBattleRangeLock(false) settings.save() add_text('Battle camera range unlocked.')
+    end
+end
+
+local function cmd_step(direction, isBattle)
+    local current = isBattle and options.battleDistance or options.distance
+    local next_v  = current + (direction > 0 and 1 or -1)
+    if isBattle then setBattleCameraDistance(next_v) else setCameraDistance(next_v) end
+    if options.saveOnIncrement then settings.save() end
+    add_text((isBattle and 'Battle ' or '') .. 'Distance changed to ' .. next_v)
+end
+
+local function cmd_toggle_soi()
+    options.saveOnIncrement = not options.saveOnIncrement
+    settings.save()
+    add_text('saveOnIncrement = ' .. tostring(options.saveOnIncrement))
+end
+
+local function cmd_toggle_acv()
+    options.autoCalcVertSpeed = not options.autoCalcVertSpeed
+    if options.autoCalcVertSpeed then setCameraDistance(options.distance) end
+    settings.save()
+    add_text('autoCalcVertSpeed = ' .. tostring(options.autoCalcVertSpeed))
+end
+
+-- Wire up to four command aliases (//camera, //cam, //xicamera, //xicam).
+local commands = {
+    command.new('camera'),
+    command.new('cam'),
+    command.new('xicamera'),
+    command.new('xicam'),
 }
 
-local codeCaveValues = {
-    0xD8, 0x05, 0x00, 0x00, 0x00, 0x00, -- fadd dword ptr [00000000]
-    0xD8, 0x4C, 0x24, 0x24, -- fmul dword ptr [esp+24]
-    0x8B, 0x16, -- mov edx,[esi]
-    0xE9, 0x00, 0x00, 0x00, 0x00 -- jmp to return point
-}
+for _, cmd in ipairs(commands) do
+    cmd:register('distance',          cmd_distance,    '<n:number>')
+    cmd:register('d',                 cmd_distance,    '<n:number>')
+    cmd:register('battle',            cmd_battle,      '<n:number>')
+    cmd:register('b',                 cmd_battle,      '<n:number>')
+    cmd:register('hspeed',            cmd_hspeed,      '<n:number>')
+    cmd:register('hs',                cmd_hspeed,      '<n:number>')
+    cmd:register('vspeed',            cmd_vspeed,      '<n:number>')
+    cmd:register('vs',                cmd_vspeed,      '<n:number>')
+    cmd:register('vheight',           cmd_vheight,     '<n:number>')
+    cmd:register('vh',                cmd_vheight,     '<n:number>')
+    cmd:register('snapheight',        cmd_vheight,     '<n:number>')
+    cmd:register('sh',                cmd_vheight,     '<n:number>')
+    cmd:register('brange',            cmd_brange,      '<n:number>')
+    cmd:register('br',                cmd_brange,      '<n:number>')
+    cmd:register('battlelock',        cmd_battlelock,  '<state:string>')
+    cmd:register('bl',                cmd_battlelock,  '<state:string>')
+    cmd:register('incr',  function() cmd_step( 1, false) end)
+    cmd:register('in',    function() cmd_step( 1, false) end)
+    cmd:register('decr',  function() cmd_step(-1, false) end)
+    cmd:register('de',    function() cmd_step(-1, false) end)
+    cmd:register('bincr', function() cmd_step( 1, true ) end)
+    cmd:register('bin',   function() cmd_step( 1, true ) end)
+    cmd:register('bdecr', function() cmd_step(-1, true ) end)
+    cmd:register('bde',   function() cmd_step(-1, true ) end)
+    cmd:register('saveOnIncrement', cmd_toggle_soi)
+    cmd:register('soi',             cmd_toggle_soi)
+    cmd:register('autoCalcVertSpeed', cmd_toggle_acv)
+    cmd:register('acv',               cmd_toggle_acv)
+    cmd:register('status', printStatus)
+    cmd:register('s',      printStatus)
+    cmd:register('help',   printHelp)
+    cmd:register('h',      printHelp)
+end
 
-local try = function(d, e)
-    if d == false then
-        error(e.ErrorMsg)
+-- ---------------------------------------------------------------------------
+-- Boot
+-- ---------------------------------------------------------------------------
+
+if core:install() then
+    add_text('[xicamera] loaded. Try //camera status')
+else
+    local off = {}
+    for _, g in ipairs(core:groupStatus()) do
+        if g.required and not g.enabled then off[#off + 1] = g.name end
     end
-    return d
+    add_text('[xicamera] WARN: not every patch group is in (' .. table.concat(off, ', ') .. '); see //camera status')
 end
+applyAll()
+settings.save()
 
---Create memory location to store Code Cave
-local codeCaveHeap = try(ffi_gc(HeapCreate(0x40000, 0, 0), function(heap)
-    destroyed = true
-    HeapDestroy(codeCaveHeap)
-end), {ErrorMsg = "Failed to create memory location for code cave."})
-
--- Allocate the space for the Code Cave
-local codeCave = ffi_cast('uint8_t*', try(HeapAlloc(codeCaveHeap, 8, 17), {ErrorMsg = "Failed to allocate memory for code cave."}))
-
--- Populate general structure of code cave
-for i = 1, #codeCaveValues do
-    codeCave[i-1] = codeCaveValues[i]
-end
-
--- Create memory location to store Camera Speed
-local cameraSpeedAdjustmentPtr = ffi_new('float*', ffi_new('float[?]', 0))
-cameraSpeedAdjustmentPtr[0] = tonumber(options.cameraSpeed)
-
--- Push in pointer to Camera Speed into the Code Cave
-local camSpeedInCave = ffi_cast('float**',codeCave + 0x02)
-camSpeedInCave[0] = cameraSpeedAdjustmentPtr; -- Push cam speed pointer into code cave
-
--- Get the point where we are injecting code to jump to code cave
-local caveJmpPoint = ffi_cast('uint8_t*', scanner.scan('&D84C24248B168BCED80D'))
-
--- Push in pointer to the return point into the Code Cave
- local returnJmpOffset = ffi_cast('int32_t*', codeCave + 0x0D)
-returnJmpOffset[0] = (caveJmpPoint + 0x06) - (codeCave + 0x0C) - 0x05
-
--- Get point where we are going to push in Pointer for where the Code Cave is
- local caveJmpOffset = ffi_cast('int32_t*', caveJmpPoint + 0x01)
-
--- Set up the Jump to the Code Cave
-caveJmpPoint[0] = 0xE9
-caveJmpOffset[0] = (codeCave - caveJmpPoint - 0x05)
-caveJmpPoint[5] = 0x90
-
---###################################################
---# Camera Distance
---###################################################
-memory.minDistance = struct({signature = 'D8C9D9C0D8C1D9C2D80D*????????D9C3DCC0D8EB'}, {
-    val = {0x0, float}
-})
-memory.maxDistance = struct({signature = 'D9442410D825*????????51D80D'}, {
-    val = {0x0, float}
-})
-memory.minBattleDistance = struct({signature = '5152D8442424D905*????????D8C1'}, {
-    val = {0x0, float}
-})
-memory.maxBattleDistance = struct({signature = 'D8C1D8CAD95C2450D805*????????D8C9'}, {
-    val = {0x0, float}
-})
-
-minDistance = memory.minDistance
-originalMinDistance = minDistance.val
-
-maxDistance = memory.maxDistance
-originalMaxDistance = maxDistance.val
-
-minBattleDistance = memory.minBattleDistance
-originalMinBattleDistance = maxDistance.val
-
-maxBattleDistance = memory.maxBattleDistance
-originalMaxBattleDistance = maxBattleDistance.val
-
-try(VirtualProtect(ffi_cast('void*', minDistance), 4, 0x04, ffi_new('DWORD[?]', 0)), {ErrorMsg = "Failed to remove minDistance Write Protection."})
-try(VirtualProtect(ffi_cast('void*', maxDistance), 4, 0x04, ffi_new('DWORD[?]', 0)), {ErrorMsg = "Failed to remove maxDistance Write Protection."})
-try(VirtualProtect(ffi_cast('void*', minBattleDistance), 4, 0x04, ffi_new('DWORD[?]', 0)), {ErrorMsg = "Failed to remove minBattleDistance Write Protection."})
-try(VirtualProtect(ffi_cast('void*', maxBattleDistance), 4, 0x04, ffi_new('DWORD[?]', 0)), {ErrorMsg = "Failed to remove maxBattleDistance Write Protection."})
-
--- Setup new distance memory location
-local newMinDistanceConstant = ffi_new('float*', ffi_new('float[?]', 0))
-newMinDistanceConstant[0] = originalMinDistance
-
---###################################################
---# Zoom on zone-in setup?
---###################################################
-zoomOnZoneInSetup = ffi_cast('float**', scanner.scan('85C0741AD9442404D80D????????D80D&????????D87C'))
-zoomOnZoneInSetup[0] = newMinDistanceConstant
-
---###################################################
---# Walk Animation
---###################################################
-walkAnimation = ffi_cast('float**', scanner.scan('0F85????????D80D&????????D913D81D'))
-walkAnimation[0] = newMinDistanceConstant
-
---###################################################
---# NPC Walk Animation
---###################################################
-npcWalkAnimation = ffi_cast('float**', scanner.scan('7514D9442410D80D&????????D91B8B8E'))
-npcWalkAnimation[0] = newMinDistanceConstant
-
---###################################################
---# BATTLE SOUND CALCULATION
---###################################################
-battleSound = ffi_cast('float**', scanner.scan('D95C2414741B487410D9442410D80D&'))
-battleSound[0] = newMinDistanceConstant
-
---###################################################
---# SET CAMERA DISTANCE BASED ON options
---###################################################
-setCameraDistance(options.distance)
-setBattleCameraDistance(options.battleDistance)
-
---###################################################
---# Restore logic on unload
---###################################################
-
-local restorePointers = function()
-    for i = 1, #originalValues do
-        caveJmpPoint[i-1] = originalValues[i]
-    end
-	
-	if (minDistance ~= 0 and minDistance ~= nil) then
-		minDistance.val = originalMinDistance
-	end
-	if (maxDistance ~= 0 and maxDistance ~= nil) then
-		maxDistance.val = originalMaxDistance
-	end
-	if (minBattleDistance ~= 0 and minBattleDistance ~= nil) then
-		minBattleDistance.val = originalMinBattleDistance
-	end
-	if (battleMaxDistance ~= 0 and battleMaxDistance ~= nil) then
-		battleMaxDistance.val = originalMaxBattleDistance
-	end
-	
-	if (zoomOnZoneInSetup ~= 0 and zoomOnZoneInSetup ~= nil) then
-		zoomOnZoneInSetup[0] = ffi_cast("float*", minDistance)
-	end
-    if (walkAnimation ~= 0 and walkAnimation ~= nil) then
-		walkAnimation[0] = ffi_cast("float*", minDistance)
-	end
-    if (npcWalkAnimation ~= 0 and npcWalkAnimation ~= nil) then
-		npcWalkAnimation[0] = ffi_cast("float*", minDistance)
-	end
-	if (battleSound ~= 0 and battleSound ~= nil) then
-		battleSound[0] = ffi_cast("float*", minDistance)
-	end
-end
-
---###################################################
---# Commands
---###################################################
-local setCameraSpeed = function(newSpeed)
-    cameraSpeedAdjustmentPtr[0] = newSpeed
-    options.cameraSpeed = newSpeed
-end
-
-local setDistance = function(newDistance)
-    local num = tonumber(newDistance)
-    if num ~= nil then
-        setCameraDistance(newDistance)
-        setCameraSpeed(num / 6.0)
-        settings.save()
-        add_text("Distance changed to " .. newDistance)
-    end
-end
-
-local setBattleDistance = function(newDistance)
-    local num = tonumber(newDistance)
-    if num ~= nil then
-        setBattleCameraDistance(newDistance)
-        settings.save()
-        add_text("Distance changed to " .. newDistance)
-    end
-end
-
-local displayHelp = function()
-    add_text("</xicamera | /camera | /xicam | /cam>")
-    add_text("Set Distance: <distance|d> <###>")
-    add_text("Set Battle Distance: <battle|b> <###>")
-    add_text("Set Battle Distance: <battle|b> <###>")
-    add_text("Displays status: <status|s>")
-end
-
-local displayStatus = function()
-    add_text("- status")
-	add_text("-  cameraDistance: " .. maxDistance.val)
-	add_text("-  battleDistance: " .. maxBattleDistance.val)
-end
-
-local camera = command.new('camera')
-local cam = command.new('cam')
-local xicamera = command.new('xicamera')
-local xicam = command.new('xicam')
-
--- define chat functions 
-enumerable.all({camera, cam,  xicamera, xicam}, function(cmd)
-    enumerable.all({'distance', 'd'}, function (fn) cmd:register(fn, setDistance, '<newDistance:integer>') end)
-    enumerable.all({'battle', 'b'}, function (fn) cmd:register(fn, setBattleDistance, '<newDistance:integer>') end)
-    enumerable.all({'help', 'h'}, function (fn) cmd:register(fn, displayHelp) end)
-    enumerable.all({'status', 's'}, function (fn) cmd:register(fn, displayStatus) end)
+-- Windower 5 currently has no first-class unload event, so we tie restore
+-- to the GC of a sentinel object: the addon environment is collected on
+-- unload, which triggers the finalizer. It is kept in a global because a
+-- top-level local stops being a GC root once this chunk returns, and the
+-- finalizer would then undo the patches while the addon is still loaded.
+xicamera_unload_sentinel = ffi_new('int*')
+ffi.gc(xicamera_unload_sentinel, function()
+    settings.save()
+    core:uninstall()
 end)
 
---TODO replace with unload event
-gc_global = ffi_new('int*')
-ffi_gc(gc_global, restorePointers)
-
 --[[
-Copyright © 2022, Hokuten
+Copyright (c) 2026, Hokuten
 All rights reserved.
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -336,17 +359,17 @@ modification, are permitted provided that the following conditions are met:
     * Redistributions in binary form must reproduce the above copyright
       notice, this list of conditions and the following disclaimer in the
       documentation and/or other materials provided with the distribution.
-    * Neither the name of Chiaia nor the
-      names of its contributors may be used to endorse or promote products
-      derived from this software without specific prior written permission.
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL Chiaia BE LIABLE FOR ANY
-DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+    * Neither the name of XICamera nor the names of its contributors may
+      be used to endorse or promote products derived from this software
+      without specific prior written permission.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
 (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
 LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
 ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ]]

@@ -1,417 +1,395 @@
+// ============================================================================
+//  XICamera.Core :: Camera.cpp
+//
+//  Owns every patch site. initCamera() locates each, captures the original
+//  bytes/values, and applies the patch; removeCamera() reverses everything.
+//  All patches are pure data (in-place float overwrites and operand
+//  pointer-rewrites) — no detours, no trampolines.
+//
+//  See docs/CAMERA_PATCH_TARGETS.md for what each signature targets.
+// ============================================================================
+
 #include "Camera.h"
-#include <rpc.h>
-#include <cctype>
-#include <algorithm>
-#include "functions.h"
+#include "FFXiClient.h"
+#include "PatternScanner.h"
 
-namespace XICamera
-{
-	namespace Core
-	{
-		Camera* Camera::s_instance = nullptr;
+#include <Windows.h>
 
-		DWORD g_MinCameraAddress; // Camera Min distance address.
-		DWORD g_MaxCameraAddress; // Camera Max distance address.
-		DWORD g_MinBattleAddress; // Camera Max distance in Battle.
-		DWORD g_MaxBattleAddress; // Camera Max distance in Battle.
-		DWORD g_ZoomOnZoneInSetupAddress;
-		DWORD g_WalkAnimationAddress;
-		DWORD g_NPCWalkAnimationAddress;
-		DWORD g_BattleSoundAddress;
-		DWORD g_horizontalPanAddress; // horizontal pan address.
-		DWORD g_verticalPanAddress; // vertical pan address.
-		DWORD g_jitterSignature;
-		DWORD g_originalJitterAddress;
-		DWORD g_battleCamRangeAddress;
-		DWORD g_originalBattleCamRangeAddress;
-		DWORD g_battleCamRangeLockAddress;
-		WORD  g_originalRangeLockValues;
+namespace XICamera {
+namespace Core {
 
-		float g_OriginalMinDistance;
-		float g_OriginalMaxDistance;
-		float g_OriginalMinBattleDistance;
-		float g_OriginalMaxBattleDistance;
-		float g_NewMinDistance;
-		float g_OriginalHorizontalPanSpeed;
-		float g_OriginalVerticalPanSpeed;
-		float g_newJitter = 1.0f;
-		float g_newBattleCamRange = 4.0f;
+// ---------------------------------------------------------------------------
+//  Patch-site state. Globals so removeCamera() can reach them; one Camera
+//  per process so the storage is fine here.
+// ---------------------------------------------------------------------------
 
-		Camera& Camera::instance(void)
-		{
-			if (Camera::s_instance == nullptr)
-			{
-				Camera::s_instance = new Camera();
-			}
-			return *Camera::s_instance;
-		}
+// Direct value-overwrite sites (the float address; we VirtualProtect+write).
+DWORD g_MinCameraAddress       = 0;
+DWORD g_MaxCameraAddress       = 0;
+DWORD g_MinBattleAddress       = 0;
+DWORD g_MaxBattleAddress       = 0;
+DWORD g_horizontalPanAddress   = 0;
+DWORD g_verticalPanAddress     = 0;
 
-		Camera::Camera()
-			: m_cameraSet(false)
-		{
-			m_logger = DummyLogProvider::instance();
-		}
+// Pointer-rewrite sites (the operand bytes inside an instruction; we replace
+// the 4-byte address operand with the address of g_NewMinDistance).
+DWORD g_ZoomOnZoneInSetupAddress = 0;
+DWORD g_WalkAnimationAddress     = 0;
+DWORD g_NPCWalkAnimationAddress  = 0;
+DWORD g_BattleSoundAddress       = 0;
 
-		Camera::~Camera()
-		{
-			removeCamera(); // just in case
-		}
+// Jitter (collision-response damping) site #2 — horizontal x/z arm. The
+// signature scan returns the match-start address; the operand rewrites
+// are at +0x0F and +0x1F. See docs/JITTER_INVESTIGATION.md.
+DWORD g_jitterMatchAddress       = 0;
+DWORD g_originalJitterPtr        = 0;
 
-		void Camera::setLogProvider(ILogProvider* newLogProvider)
-		{
-			if (newLogProvider == nullptr)
-			{
-				return;
-			}
-			m_logger = newLogProvider;
-		}
+// Jitter site #1 — vertical/single-axis arm. Same proximity-push family
+// inside sub_1001ED90 but uses -0.125 (negative) and a single FMUL.
+DWORD g_jitterPush1MatchAddress  = 0;
+DWORD g_originalJitterPush1Ptr   = 0;
 
-		bool Camera::initCamera(void)
-		{
-			if (m_cameraSet == false)
-			{
-				g_MinCameraAddress = *(DWORD*)(XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD8\xC9\xD9\xC0\xD8\xC1\xD9\xC2\xD8\x0D\xFF\xFF\xFF\xFF\xD9\xC3\xDC\xC0\xD8\xEB", "xxxxxxxxxx????xxxxxx") + 0x0A);
-				if (g_MinCameraAddress == 0)
-				{
-					removeCamera();
-					m_logger->logMessage(ILogProvider::LogLevel::Info, "could not find min camera distance");
-					return 0;
-				}
-				g_OriginalMinDistance = *(FLOAT*)(g_MinCameraAddress);
+// Battle camera range: same shape — match start at the signature, slot
+// operand at +0x15, 2-byte clamp at +0x19.
+DWORD g_battleCamRangeSlotAddress    = 0;
+DWORD g_originalBattleCamRangePtr    = 0;
+DWORD g_battleCamRangeLockAddress    = 0;
+WORD  g_originalRangeLockValues      = 0;
 
-				g_MaxCameraAddress = *(DWORD*)(XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD9\x44\x24\x10\xD8\x25\xFF\xFF\xFF\xFF\x51\xD8\x0D", "xxxxxx????xxx") + 0x06);
-				if (g_MaxCameraAddress == 0)
-				{
-					removeCamera();
-					m_logger->logMessage(ILogProvider::LogLevel::Info, "could not find max camera distance");
-					return 0;
-				}
-				g_OriginalMaxDistance = *(FLOAT*)(g_MaxCameraAddress);
+// Original values to restore on uninstall.
+float g_OriginalMinDistance        = 0.0f;
+float g_OriginalMaxDistance        = 0.0f;
+float g_OriginalMinBattleDistance  = 0.0f;
+float g_OriginalMaxBattleDistance  = 0.0f;
+float g_OriginalHorizontalPanSpeed = 0.0f;
+float g_OriginalVerticalPanSpeed   = 0.0f;
 
-				g_MinBattleAddress = *(DWORD*)(XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\x51\x52\xD8\x44\x24\x24\xD9\x05\xFF\xFF\xFF\xFF\xD8\xC1", "xxxxxxxx????xx") + 0x08);
-				if (g_MinBattleAddress == 0)
-				{
-					removeCamera();
-					m_logger->logMessage(ILogProvider::LogLevel::Info, "could not find min battle camera distance");
-					return 0;
-				}
-				g_OriginalMinBattleDistance = *(FLOAT*)(g_MinBattleAddress);
+// Our overrides — game reads these via the rewritten pointers.
+float g_NewMinDistance     = 0.0f;
+float g_newJitter          = 1.0f;   // for site #2 (positive); was 0.125
+float g_newJitterNeg       = -1.0f;  // for site #1 (negative); was -0.125
+float g_newBattleCamRange  = 4.0f;
 
-				g_MaxBattleAddress = *(DWORD*)(XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD8\xC1\xD8\xCA\xD9\x5C\x24\x50\xD8\x05\xFF\xFF\xFF\xFF\xD8\xC9", "xxxxxxxxxx????xx") + 0x0A);
-				if (g_MaxBattleAddress == 0)
-				{
-					removeCamera();
-					m_logger->logMessage(ILogProvider::LogLevel::Info, "could not find max battle camera distance");
-					return 0;
-				}
-				g_OriginalMaxBattleDistance = *(FLOAT*)(g_MaxBattleAddress);
+// ---------------------------------------------------------------------------
+//  Local helpers
+// ---------------------------------------------------------------------------
 
-				g_ZoomOnZoneInSetupAddress = XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\x85\xC0\x74\x1A\xD9\x44\x24\x04\xD8\x0D\xFF\xFF\xFF\xFF\xD8\x0D\xFF\xFF\xFF\xFF\xD8\x7C", "xxxxxxxxxx????xx????xx") + 0x10;
-				if (g_ZoomOnZoneInSetupAddress == 0)
-				{
-					removeCamera();
-					return 0;
-				}
-				g_NewMinDistance = g_OriginalMinDistance;
-				*(DWORD*)g_ZoomOnZoneInSetupAddress = (DWORD)&g_NewMinDistance;
+namespace {
 
-				g_WalkAnimationAddress = XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\x0F\x85\xFF\xFF\xFF\xFF\xD8\x0D\xFF\xFF\xFF\xFF\xD9\x13\xD8\x1D", "xx????xx????xxxx") + 0x08;
-				if (g_WalkAnimationAddress == 0)
-				{
-					removeCamera();
-					return 0;
-				}
-				*(DWORD*)g_WalkAnimationAddress = (DWORD)&g_NewMinDistance;
+NullLogger        s_nullLogger;
+FFXiClient        s_client;
 
-
-				g_NPCWalkAnimationAddress = XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\x75\x14\xD9\x44\x24\x10\xD8\x0D\xFF\xFF\xFF\xFF\xD9\x1B\x8B\x8E", "xxxxxxxx????xxxx") + 0x08;
-				if (g_NPCWalkAnimationAddress == 0)
-				{
-					removeCamera();
-					return 0;
-				}
-				*(DWORD*)g_NPCWalkAnimationAddress = (DWORD)&g_NewMinDistance;
-
-				g_BattleSoundAddress = XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD9\x5C\x24\x14\x74\x1B\x48\x74\x10\xD9\x44\x24\x10\xD8\x0D", "xxxxxxxxxxxxxxx") + 0x0F;
-				if (g_BattleSoundAddress == 0)
-				{
-					removeCamera();
-					return 0;
-				}
-				*(DWORD*)g_BattleSoundAddress = (DWORD)&g_NewMinDistance;
-
-				g_horizontalPanAddress = *(DWORD*)(XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD8\x4C\x24\x20\x8B\x06\x8B\xCE\xD8\x0D", "xxxxxxxxxx") + 0x0A);
-				if (g_horizontalPanAddress == 0)
-				{
-					removeCamera();
-					m_logger->logMessage(ILogProvider::LogLevel::Info, "could not find horizontal pan position");
-					return 0;
-				}
-				g_OriginalHorizontalPanSpeed = *(FLOAT*)(g_horizontalPanAddress);
-
-				g_verticalPanAddress = *(DWORD*)(XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD8\x4C\x24\x24\x8B\x16\x8B\xCE\xD8\x0D", "xxxxxxxxxx") + 0x0A);
-				if (g_verticalPanAddress == 0)
-				{
-					removeCamera();
-					m_logger->logMessage(ILogProvider::LogLevel::Info, "could not find vertical pan position");
-					return 0;
-				}
-				g_OriginalVerticalPanSpeed = *(FLOAT*)(g_verticalPanAddress);
-
-				g_jitterSignature = XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\x8D\x54\x24\x2C\x8D\x44\x24\x2C\xD8\xC9\x52\x55\x50", "xxxxxxxxxxxxx");
-				if (g_jitterSignature == 0)
-				{
-					removeCamera();
-					m_logger->logMessage(ILogProvider::LogLevel::Info, "could not find jitter signature");
-					return 0;
-				}
-				g_originalJitterAddress = *(DWORD*)(g_jitterSignature + 0x0F);
-				*(DWORD*)(g_jitterSignature + 0x0F) = (DWORD)&g_newJitter;
-				*(DWORD*)(g_jitterSignature + 0x1F) = (DWORD)&g_newJitter;
-
-				g_battleCamRangeAddress = XICamera::functions::FindPattern("FFXiMain.dll", (BYTE*)"\xD8\xC9\xD9\x9C\x24\xDC\x00\x00\x00\xDD\xD8\xD9\x44\x24\x50\xD8\x44\x24\x28\xD8\x3D", "xxxxxxxxxxxxxxxxxxxxx") + 0x15;
-				if (g_battleCamRangeAddress == 0)
-				{
-					removeCamera();
-					m_logger->logMessage(ILogProvider::LogLevel::Info, "could not find battle cam range signature");
-					return 0;
-				}
-				g_originalBattleCamRangeAddress = *(DWORD*)g_battleCamRangeAddress;
-				*(DWORD*)g_battleCamRangeAddress = (DWORD)&g_newBattleCamRange;
-
-				g_battleCamRangeLockAddress = g_battleCamRangeAddress + 0x04;
-				g_originalRangeLockValues = *(WORD*)g_battleCamRangeLockAddress;
-
-				setCameraDistance(m_cameraDistance);
-				setBattleDistance(m_battleDistance);
-				setHorizontalPanSpeed(m_horizontalPanSpeed);
-				setVerticalPanSpeed(m_verticalPanSpeed);
-				setBattleCameraRange(m_battleRange);
-				setBattleRangeLock(m_battleRangeLocked);
-
-				m_cameraSet = true;
-
-				return m_cameraSet;
-			}
-
-			m_logger->logMessage(m_logDebug, "camera already set");
-			return false;
-		}
-
-		bool Camera::removeCamera(void)
-		{
-			m_cameraSet = false;
-
-			if (g_MinCameraAddress != 0)
-			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_MinCameraAddress, 4, PAGE_READWRITE, &dwProtect);
-				*(FLOAT*)(g_MinCameraAddress) = g_OriginalMinDistance;
-				VirtualProtect((void*)g_MinCameraAddress, 4, dwProtect, new DWORD);
-			}
-
-			if (g_MaxCameraAddress != 0)
-			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_MaxCameraAddress, 4, PAGE_READWRITE, &dwProtect);
-				*(FLOAT*)(g_MaxCameraAddress) = g_OriginalMaxDistance;
-				VirtualProtect((void*)g_MaxCameraAddress, 4, dwProtect, new DWORD);
-			}
-
-			if (g_MinBattleAddress != 0)
-			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_MinBattleAddress, 4, PAGE_READWRITE, &dwProtect);
-				*(FLOAT*)(g_MinBattleAddress) = g_OriginalMinBattleDistance;
-				VirtualProtect((void*)g_MinBattleAddress, 4, dwProtect, new DWORD);
-			}
-
-			if (g_MaxBattleAddress != 0)
-			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_MaxBattleAddress, 4, PAGE_READWRITE, &dwProtect);
-				*(FLOAT*)(g_MaxBattleAddress) = g_OriginalMaxBattleDistance;
-				VirtualProtect((void*)g_MaxBattleAddress, 4, dwProtect, new DWORD);
-			}
-
-			if (g_horizontalPanAddress != 0)
-			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_horizontalPanAddress, 4, PAGE_READWRITE, &dwProtect);
-				*(FLOAT*)(g_horizontalPanAddress) = g_OriginalHorizontalPanSpeed;
-				VirtualProtect((void*)g_horizontalPanAddress, 4, dwProtect, new DWORD);
-			}
-
-			if (g_verticalPanAddress != 0)
-			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_verticalPanAddress, 4, PAGE_READWRITE, &dwProtect);
-				*(FLOAT*)(g_verticalPanAddress) = g_OriginalVerticalPanSpeed;
-				VirtualProtect((void*)g_verticalPanAddress, 4, dwProtect, new DWORD);
-			}
-
-			if (g_ZoomOnZoneInSetupAddress != 0)
-			{
-				*(DWORD*)g_ZoomOnZoneInSetupAddress = g_MinCameraAddress;
-			}
-			if (g_WalkAnimationAddress != 0)
-			{
-				*(DWORD*)g_WalkAnimationAddress = g_MinCameraAddress;
-			}
-			if (g_NPCWalkAnimationAddress != 0)
-			{
-				*(DWORD*)g_NPCWalkAnimationAddress = g_MinCameraAddress;
-			}
-			if (g_BattleSoundAddress != 0)
-			{
-				*(DWORD*)g_BattleSoundAddress = g_MinCameraAddress;
-			}
-			if (g_jitterSignature != 0)
-			{
-				*(DWORD*)(g_jitterSignature + 0x0F) = g_originalJitterAddress;
-				*(DWORD*)(g_jitterSignature + 0x1F) = g_originalJitterAddress;
-			}
-
-			if (g_battleCamRangeAddress != 0)
-			{
-				*(DWORD*)(g_battleCamRangeAddress) = g_originalBattleCamRangeAddress;
-
-				if (g_originalRangeLockValues != *(WORD*)g_battleCamRangeLockAddress)
-				{
-					*(WORD*)g_battleCamRangeLockAddress = g_originalRangeLockValues;
-				}
-			}
-
-			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_cameraSet = %s", m_cameraSet ? "true" : "false");
-			return m_cameraSet;
-		}
-
-		void Camera::setDebugLog(bool state)
-		{
-			m_logDebug = (state) ? ILogProvider::LogLevel::Debug : ILogProvider::LogLevel::Discard;
-			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_logDebug = %s", state ? "Debug" : "Discard");
-		}
-
-		bool Camera::setCameraDistance(const int& newDistance)
-		{
-			m_cameraDistance = newDistance;
-
-			if (g_MinCameraAddress != 0)
-			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_MinCameraAddress, 4, PAGE_READWRITE, &dwProtect);
-				*(FLOAT*)(g_MinCameraAddress) = m_cameraDistance - (g_OriginalMaxDistance - g_OriginalMinDistance);
-				VirtualProtect((void*)g_MinCameraAddress, 4, dwProtect, new DWORD);
-			}
-
-			if (g_MaxCameraAddress != 0)
-			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_MaxCameraAddress, 4, PAGE_READWRITE, &dwProtect);
-				*(FLOAT*)(g_MaxCameraAddress) = m_cameraDistance;
-				VirtualProtect((void*)g_MaxCameraAddress, 4, dwProtect, new DWORD);
-			}
-
-			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_cameraDistance = '%d'", m_cameraDistance);
-
-			return true;
-		}
-
-		bool Camera::setBattleDistance(const int& newDistance)
-		{
-			m_battleDistance = newDistance;
-
-			if (g_MinBattleAddress != 0)
-			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_MinBattleAddress, 4, PAGE_READWRITE, &dwProtect);
-				*(FLOAT*)(g_MinBattleAddress) = m_battleDistance - (g_OriginalMinBattleDistance - g_OriginalMinBattleDistance);
-				VirtualProtect((void*)g_MinBattleAddress, 4, dwProtect, new DWORD);
-			}
-
-			if (g_MaxBattleAddress != 0)
-			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_MaxBattleAddress, 4, PAGE_READWRITE, &dwProtect);
-				*(FLOAT*)(g_MaxBattleAddress) = m_battleDistance;
-				VirtualProtect((void*)g_MaxBattleAddress, 4, dwProtect, new DWORD);
-			}
-
-			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_battleDistance = '%d'", m_battleDistance);
-
-			return true;
-		}
-
-		bool Camera::setHorizontalPanSpeed(const int& newSpeed)
-		{
-			m_horizontalPanSpeed = newSpeed;
-
-			if (g_horizontalPanAddress != 0)
-			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_horizontalPanAddress, 4, PAGE_READWRITE, &dwProtect);
-				*(FLOAT*)(g_horizontalPanAddress) = m_horizontalPanSpeed / 100.0;
-				VirtualProtect((void*)g_horizontalPanAddress, 4, dwProtect, new DWORD);
-			}
-
-			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_horizontalPanSpeed = '%d'", m_horizontalPanSpeed);
-
-			return true;
-		}
-
-		bool Camera::setVerticalPanSpeed(const int& newSpeed)
-		{
-			m_verticalPanSpeed = newSpeed;
-
-			if (g_verticalPanAddress != 0)
-			{
-				DWORD dwProtect;
-				VirtualProtect((void*)g_verticalPanAddress, 4, PAGE_READWRITE, &dwProtect);
-				*(FLOAT*)(g_verticalPanAddress) = m_verticalPanSpeed / 100.0;
-				VirtualProtect((void*)g_verticalPanAddress, 4, dwProtect, new DWORD);
-			}
-
-			m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_verticalPanSpeed = '%d'", m_verticalPanSpeed);
-
-			return true;
-		}
-
-		bool Camera::setBattleCameraRange(const int& newRange)
-		{
-			if (newRange >= 0 && newRange <= 100)
-			{
-				m_battleRange = newRange;
-
-				if (g_newBattleCamRange != 0)
-				{
-					g_newBattleCamRange = m_battleRange * 1.0f;
-				}
-
-				m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_battleRange = '%d'", m_battleRange);
-
-				return true;
-			}
-		}
-
-		bool Camera::setBattleRangeLock(const bool& isLocked)
-		{
-			m_battleRangeLocked = isLocked;
-
-			if (g_battleCamRangeLockAddress != 0)
-			{
-				if (m_battleRangeLocked)
-				{
-					*(WORD*)g_battleCamRangeLockAddress = g_originalRangeLockValues;
-				}
-				else
-				{
-					*(WORD*)g_battleCamRangeLockAddress = 0x9090;
-				}
-
-				m_logger->logMessageF(ILogProvider::LogLevel::Info, "m_battleRangeLocked = '%d'", m_battleRangeLocked);
-
-				return true;
-			}
-		}
-	}
+// Wrapper around ScanForPattern that targets the FFXiClient image. Returns
+// the match start address (DWORD-sized to match the legacy globals).
+DWORD findIn(const FFXiClient& c, const uint8_t* pattern, const char* mask) {
+    return static_cast<DWORD>(
+        ScanForPattern(c.Base(), c.Size(), pattern, mask));
 }
+
+// VirtualProtect(...) wrapper that writes a 4-byte float and restores the
+// page protection. Replaces the leaky `new DWORD` pattern that was here
+// before. Safe to call on a 0 address (no-op).
+void writeFloat(DWORD addr, float value) {
+    if (addr == 0) return;
+    DWORD oldProtect = 0, tmp = 0;
+    VirtualProtect(reinterpret_cast<void*>(addr), 4, PAGE_READWRITE, &oldProtect);
+    *reinterpret_cast<float*>(addr) = value;
+    VirtualProtect(reinterpret_cast<void*>(addr), 4, oldProtect, &tmp);
+}
+
+// Same shape but for a 4-byte DWORD (used for operand pointer rewrites).
+void writeDword(DWORD addr, DWORD value) {
+    if (addr == 0) return;
+    DWORD oldProtect = 0, tmp = 0;
+    VirtualProtect(reinterpret_cast<void*>(addr), 4, PAGE_READWRITE, &oldProtect);
+    *reinterpret_cast<DWORD*>(addr) = value;
+    VirtualProtect(reinterpret_cast<void*>(addr), 4, oldProtect, &tmp);
+}
+
+void writeWord(DWORD addr, WORD value) {
+    if (addr == 0) return;
+    DWORD oldProtect = 0, tmp = 0;
+    VirtualProtect(reinterpret_cast<void*>(addr), 2, PAGE_READWRITE, &oldProtect);
+    *reinterpret_cast<WORD*>(addr) = value;
+    VirtualProtect(reinterpret_cast<void*>(addr), 2, oldProtect, &tmp);
+}
+
+} // namespace
+
+// ---------------------------------------------------------------------------
+//  Camera
+// ---------------------------------------------------------------------------
+
+Camera* Camera::s_instance = nullptr;
+
+Camera& Camera::instance() {
+    if (!s_instance) s_instance = new Camera();
+    return *s_instance;
+}
+
+Camera::Camera() {
+    m_logger = &s_nullLogger;
+}
+
+Camera::~Camera() {
+    removeCamera(); // just in case
+}
+
+void Camera::setLogger(ILogger* logger) {
+    if (logger) m_logger = logger;
+}
+
+void Camera::setDebugLog(bool state) {
+    m_debugLevel = state ? LogLevel::Debug : LogLevel::Off;
+    Logf(m_logger, LogLevel::Info, "debug logging = %s", state ? "on" : "off");
+}
+
+bool Camera::initCamera() {
+    if (m_cameraSet) {
+        Logf(m_logger, m_debugLevel, "camera already set");
+        return false;
+    }
+
+    if (!s_client.Locate()) {
+        Logf(m_logger, LogLevel::Error,
+             "FFXiMain.dll not loaded; XICamera will be inactive");
+        return false;
+    }
+
+    // ---- value-overwrite sites ----------------------------------------
+    // These four scans find an FPU load instruction; the 4-byte operand at
+    // the documented offset is the absolute address of the float we want
+    // to overwrite. Each is independent — a miss only disables that one
+    // value, the rest of XICamera continues to work.
+
+    auto resolveValueSite = [](const uint8_t* pat, const char* mask, int operandOffset) -> DWORD {
+        DWORD match = findIn(s_client, pat, mask);
+        return match == 0 ? 0 : *reinterpret_cast<DWORD*>(match + operandOffset);
+    };
+
+    g_MinCameraAddress = resolveValueSite(
+        (const uint8_t*)"\xD8\xC9\xD9\xC0\xD8\xC1\xD9\xC2\xD8\x0D\xFF\xFF\xFF\xFF\xD9\xC3\xDC\xC0\xD8\xEB",
+        "xxxxxxxxxx????xxxxxx", 0x0A);
+    if (g_MinCameraAddress == 0)
+        Logf(m_logger, LogLevel::Warn, "min camera distance signature not found");
+    else
+        g_OriginalMinDistance = *reinterpret_cast<float*>(g_MinCameraAddress);
+
+    g_MaxCameraAddress = resolveValueSite(
+        (const uint8_t*)"\xD9\x44\x24\x10\xD8\x25\xFF\xFF\xFF\xFF\x51\xD8\x0D",
+        "xxxxxx????xxx", 0x06);
+    if (g_MaxCameraAddress == 0)
+        Logf(m_logger, LogLevel::Warn, "max camera distance signature not found");
+    else
+        g_OriginalMaxDistance = *reinterpret_cast<float*>(g_MaxCameraAddress);
+
+    g_MinBattleAddress = resolveValueSite(
+        (const uint8_t*)"\x51\x52\xD8\x44\x24\x24\xD9\x05\xFF\xFF\xFF\xFF\xD8\xC1",
+        "xxxxxxxx????xx", 0x08);
+    if (g_MinBattleAddress == 0)
+        Logf(m_logger, LogLevel::Warn, "min battle distance signature not found");
+    else
+        g_OriginalMinBattleDistance = *reinterpret_cast<float*>(g_MinBattleAddress);
+
+    g_MaxBattleAddress = resolveValueSite(
+        (const uint8_t*)"\xD8\xC1\xD8\xCA\xD9\x5C\x24\x50\xD8\x05\xFF\xFF\xFF\xFF\xD8\xC9",
+        "xxxxxxxxxx????xx", 0x0A);
+    if (g_MaxBattleAddress == 0)
+        Logf(m_logger, LogLevel::Warn, "max battle distance signature not found");
+    else
+        g_OriginalMaxBattleDistance = *reinterpret_cast<float*>(g_MaxBattleAddress);
+
+    g_horizontalPanAddress = resolveValueSite(
+        (const uint8_t*)"\xD8\x4C\x24\x20\x8B\x06\x8B\xCE\xD8\x0D",
+        "xxxxxxxxxx", 0x0A);
+    if (g_horizontalPanAddress == 0)
+        Logf(m_logger, LogLevel::Warn, "horizontal pan speed signature not found");
+    else
+        g_OriginalHorizontalPanSpeed = *reinterpret_cast<float*>(g_horizontalPanAddress);
+
+    g_verticalPanAddress = resolveValueSite(
+        (const uint8_t*)"\xD8\x4C\x24\x24\x8B\x16\x8B\xCE\xD8\x0D",
+        "xxxxxxxxxx", 0x0A);
+    if (g_verticalPanAddress == 0)
+        Logf(m_logger, LogLevel::Warn, "vertical pan speed signature not found");
+    else
+        g_OriginalVerticalPanSpeed = *reinterpret_cast<float*>(g_verticalPanAddress);
+
+    // ---- pointer-rewrite sites (min-distance followers) ---------------
+    // Each redirects an in-instruction 4-byte operand to point at our own
+    // float so we can move the effective min distance everywhere it's read.
+
+    g_NewMinDistance = g_OriginalMinDistance;
+
+    auto resolveOperandSite = [](const uint8_t* pat, const char* mask, int operandOffset) -> DWORD {
+        DWORD match = findIn(s_client, pat, mask);
+        return match == 0 ? 0 : match + operandOffset;
+    };
+
+    g_ZoomOnZoneInSetupAddress = resolveOperandSite(
+        (const uint8_t*)"\x85\xC0\x74\x1A\xD9\x44\x24\x04\xD8\x0D\xFF\xFF\xFF\xFF\xD8\x0D\xFF\xFF\xFF\xFF\xD8\x7C",
+        "xxxxxxxxxx????xx????xx", 0x10);
+    if (g_ZoomOnZoneInSetupAddress)
+        writeDword(g_ZoomOnZoneInSetupAddress, reinterpret_cast<DWORD>(&g_NewMinDistance));
+
+    g_WalkAnimationAddress = resolveOperandSite(
+        (const uint8_t*)"\x0F\x85\xFF\xFF\xFF\xFF\xD8\x0D\xFF\xFF\xFF\xFF\xD9\x13\xD8\x1D",
+        "xx????xx????xxxx", 0x08);
+    if (g_WalkAnimationAddress)
+        writeDword(g_WalkAnimationAddress, reinterpret_cast<DWORD>(&g_NewMinDistance));
+
+    g_NPCWalkAnimationAddress = resolveOperandSite(
+        (const uint8_t*)"\x75\x14\xD9\x44\x24\x10\xD8\x0D\xFF\xFF\xFF\xFF\xD9\x1B\x8B\x8E",
+        "xxxxxxxx????xxxx", 0x08);
+    if (g_NPCWalkAnimationAddress)
+        writeDword(g_NPCWalkAnimationAddress, reinterpret_cast<DWORD>(&g_NewMinDistance));
+
+    g_BattleSoundAddress = resolveOperandSite(
+        (const uint8_t*)"\xD9\x5C\x24\x14\x74\x1B\x48\x74\x10\xD9\x44\x24\x10\xD8\x0D",
+        "xxxxxxxxxxxxxxx", 0x0F);
+    if (g_BattleSoundAddress)
+        writeDword(g_BattleSoundAddress, reinterpret_cast<DWORD>(&g_NewMinDistance));
+
+    // ---- jitter / collision-response damping --------------------------
+    // Site #2: horizontal x/z proximity push. Two FMUL operands at
+    // +0x0F and +0x1F both load the +0.125 damping rate; we redirect
+    // both at our +1.0 override so the lerp completes in one frame.
+    g_jitterMatchAddress = findIn(s_client,
+        (const uint8_t*)"\x8D\x54\x24\x2C\x8D\x44\x24\x2C\xD8\xC9\x52\x55\x50",
+        "xxxxxxxxxxxxx");
+    if (g_jitterMatchAddress == 0) {
+        Logf(m_logger, LogLevel::Warn, "jitter signature (push #2) not found");
+    } else {
+        g_originalJitterPtr = *reinterpret_cast<DWORD*>(g_jitterMatchAddress + 0x0F);
+        writeDword(g_jitterMatchAddress + 0x0F, reinterpret_cast<DWORD>(&g_newJitter));
+        writeDword(g_jitterMatchAddress + 0x1F, reinterpret_cast<DWORD>(&g_newJitter));
+    }
+
+    // Site #1: vertical/single-axis proximity push. One FMUL operand at
+    // +0x0B reads the -0.125 damping rate; we redirect at our -1.0
+    // override so this arm also completes in one frame.
+    g_jitterPush1MatchAddress = findIn(s_client,
+        (const uint8_t*)"\xD8\x64\x24\x10\x51\x8D\x44\x24\x2C\xD8\x0D\xFF\xFF\xFF\xFF\xD9\x1C\x24",
+        "xxxxxxxxxxx????xxx");
+    if (g_jitterPush1MatchAddress == 0) {
+        Logf(m_logger, LogLevel::Warn, "jitter signature (push #1) not found");
+    } else {
+        g_originalJitterPush1Ptr = *reinterpret_cast<DWORD*>(g_jitterPush1MatchAddress + 0x0B);
+        writeDword(g_jitterPush1MatchAddress + 0x0B, reinterpret_cast<DWORD>(&g_newJitterNeg));
+    }
+
+    // ---- battle camera range + lock -----------------------------------
+    DWORD battleRangeMatch = findIn(s_client,
+        (const uint8_t*)"\xD8\xC9\xD9\x9C\x24\xDC\x00\x00\x00\xDD\xD8\xD9\x44\x24\x50\xD8\x44\x24\x28\xD8\x3D",
+        "xxxxxxxxxxxxxxxxxxxxx");
+    if (battleRangeMatch == 0) {
+        Logf(m_logger, LogLevel::Warn, "battle camera range signature not found");
+    } else {
+        g_battleCamRangeSlotAddress    = battleRangeMatch + 0x15;
+        g_originalBattleCamRangePtr    = *reinterpret_cast<DWORD*>(g_battleCamRangeSlotAddress);
+        writeDword(g_battleCamRangeSlotAddress, reinterpret_cast<DWORD>(&g_newBattleCamRange));
+        g_battleCamRangeLockAddress    = battleRangeMatch + 0x19;
+        g_originalRangeLockValues      = *reinterpret_cast<WORD*>(g_battleCamRangeLockAddress);
+    }
+
+    // Apply current settings (re-applies whatever the launcher has loaded).
+    setCameraDistance(m_cameraDistance);
+    setBattleDistance(m_battleDistance);
+    setHorizontalPanSpeed(m_horizontalPanSpeed);
+    setVerticalPanSpeed(m_verticalPanSpeed);
+    setBattleCameraRange(m_battleRange);
+    setBattleRangeLock(m_battleRangeLocked);
+
+    m_cameraSet = true;
+    return true;
+}
+
+bool Camera::removeCamera() {
+    m_cameraSet = false;
+
+    writeFloat(g_MinCameraAddress,       g_OriginalMinDistance);
+    writeFloat(g_MaxCameraAddress,       g_OriginalMaxDistance);
+    writeFloat(g_MinBattleAddress,       g_OriginalMinBattleDistance);
+    writeFloat(g_MaxBattleAddress,       g_OriginalMaxBattleDistance);
+    writeFloat(g_horizontalPanAddress,   g_OriginalHorizontalPanSpeed);
+    writeFloat(g_verticalPanAddress,     g_OriginalVerticalPanSpeed);
+
+    // Min-distance followers all originally pointed at g_MinCameraAddress.
+    if (g_ZoomOnZoneInSetupAddress) writeDword(g_ZoomOnZoneInSetupAddress, g_MinCameraAddress);
+    if (g_WalkAnimationAddress)     writeDword(g_WalkAnimationAddress,     g_MinCameraAddress);
+    if (g_NPCWalkAnimationAddress)  writeDword(g_NPCWalkAnimationAddress,  g_MinCameraAddress);
+    if (g_BattleSoundAddress)       writeDword(g_BattleSoundAddress,       g_MinCameraAddress);
+
+    if (g_jitterMatchAddress) {
+        writeDword(g_jitterMatchAddress + 0x0F, g_originalJitterPtr);
+        writeDword(g_jitterMatchAddress + 0x1F, g_originalJitterPtr);
+    }
+    if (g_jitterPush1MatchAddress) {
+        writeDword(g_jitterPush1MatchAddress + 0x0B, g_originalJitterPush1Ptr);
+    }
+
+    if (g_battleCamRangeSlotAddress) {
+        writeDword(g_battleCamRangeSlotAddress, g_originalBattleCamRangePtr);
+        if (g_originalRangeLockValues != *reinterpret_cast<WORD*>(g_battleCamRangeLockAddress))
+            writeWord(g_battleCamRangeLockAddress, g_originalRangeLockValues);
+    }
+
+    Logf(m_logger, LogLevel::Info, "camera reset");
+    return true;
+}
+
+bool Camera::setCameraDistance(const int& newDistance) {
+    m_cameraDistance = newDistance;
+    if (g_MinCameraAddress)
+        writeFloat(g_MinCameraAddress, m_cameraDistance - (g_OriginalMaxDistance - g_OriginalMinDistance));
+    if (g_MaxCameraAddress)
+        writeFloat(g_MaxCameraAddress, static_cast<float>(m_cameraDistance));
+    Logf(m_logger, LogLevel::Info, "cameraDistance = %d", m_cameraDistance);
+    return true;
+}
+
+bool Camera::setBattleDistance(const int& newDistance) {
+    m_battleDistance = newDistance;
+    if (g_MinBattleAddress)
+        writeFloat(g_MinBattleAddress, m_battleDistance - (g_OriginalMaxBattleDistance - g_OriginalMinBattleDistance));
+    if (g_MaxBattleAddress)
+        writeFloat(g_MaxBattleAddress, static_cast<float>(m_battleDistance));
+    Logf(m_logger, LogLevel::Info, "battleDistance = %d", m_battleDistance);
+    return true;
+}
+
+bool Camera::setHorizontalPanSpeed(const int& newSpeed) {
+    m_horizontalPanSpeed = newSpeed;
+    if (g_horizontalPanAddress)
+        writeFloat(g_horizontalPanAddress, m_horizontalPanSpeed / 100.0f);
+    Logf(m_logger, LogLevel::Info, "horizontalPanSpeed = %d", m_horizontalPanSpeed);
+    return true;
+}
+
+bool Camera::setVerticalPanSpeed(const int& newSpeed) {
+    m_verticalPanSpeed = newSpeed;
+    if (g_verticalPanAddress)
+        writeFloat(g_verticalPanAddress, m_verticalPanSpeed / 100.0f);
+    Logf(m_logger, LogLevel::Info, "verticalPanSpeed = %d", m_verticalPanSpeed);
+    return true;
+}
+
+bool Camera::setBattleCameraRange(const int& newRange) {
+    if (newRange < 0 || newRange > 100) return false;
+    m_battleRange = newRange;
+    g_newBattleCamRange = static_cast<float>(m_battleRange);
+    Logf(m_logger, LogLevel::Info, "battleRange = %d", m_battleRange);
+    return true;
+}
+
+bool Camera::setBattleRangeLock(const bool& isLocked) {
+    m_battleRangeLocked = isLocked;
+    if (g_battleCamRangeLockAddress == 0) return false;
+    writeWord(g_battleCamRangeLockAddress,
+              isLocked ? g_originalRangeLockValues : 0x9090);
+    Logf(m_logger, LogLevel::Info, "battleRangeLocked = %d", m_battleRangeLocked);
+    return true;
+}
+
+} // namespace Core
+} // namespace XICamera

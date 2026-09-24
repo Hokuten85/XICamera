@@ -1,10 +1,12 @@
 addon.author   = 'Hokuten'
 addon.name     = 'xicamera'
-addon.version  = '0.7.10'
+addon.version  = '0.8.0'
 addon.desc     = 'Modifies the camera distance from the player.'
 
 local common = require('common')
 local settings = require('settings')
+local imgui = require('imgui')
+local Core = require('xicamera_core')
 
 ----------------------------------------------------------------------------------------------------
 -- Configurations
@@ -22,39 +24,82 @@ local default_settings = T{
 local configs = settings.load(default_settings)
 
 ----------------------------------------------------------------------------------------------------
--- Variables
+-- Memory adapter for the shared core
 ----------------------------------------------------------------------------------------------------
-local minDistancePtr
-local originalMinDistance
-local maxDistancePtr
-local originalMaxDistance
+local mem = {
+	find        = function(sig) return ashita.memory.find('FFXiMain.dll', 0, sig, 0, 0) end,
+	read_u16    = function(a) return ashita.memory.read_uint16(a) end,
+	read_u32    = function(a) return ashita.memory.read_uint32(a) end,
+	read_float  = function(a) return ashita.memory.read_float(a) end,
+	write_u16   = function(a, v) ashita.memory.write_uint16(a, v) end,
+	write_u32   = function(a, v) ashita.memory.write_uint32(a, v) end,
+	write_float = function(a, v) ashita.memory.write_float(a, v) end,
+	alloc       = function(size) return ashita.memory.alloc(size) end,
+	log         = function(text) print('[xicamera] ' .. text) end,
+}
+local core = Core.new(mem)
 
-local minBattleDistancePtr
-local originalMinBattleDistance
-local maxBattleDistancePtr
-local originalMaxBattleDistance
+-- Settings window state. ImGui writes widget values back into these one-element tables.
+local ui = T{
+	is_open            = T{ false },
+	distance           = T{ 0 },
+	battleDistance     = T{ 0 },
+	battleRange        = T{ 0 },
+	battleRangeLocked  = T{ true },
+	horizontalPanSpeed = T{ 0 },
+	verticalPanSpeed   = T{ 0 },
+	autoCalcVertSpeed  = T{ true },
+	saveOnIncrement    = T{ false },
+	heightOffset       = T{ 0 },
+	lastSnap           = nil,
+}
 
-local zoomSetupSig
-local walkAnimationSig
-local npcWalkAnimationSig
-local battleSoundSig
-local originalMinDistancePtr
-local newMinDistanceConstant
+----------------------------------------------------------------------------------------------------
+-- Setters: keep configs and the core's slots in step
+----------------------------------------------------------------------------------------------------
+function setHorizontalPanSpeed(newSpeed)
+	configs.horizontalPanSpeed = newSpeed
+	core:setHorizontalPanSpeed(newSpeed)
+end
 
-local horizontalPanSpeedPtr
-local oringinalHorizontalPanSpeed
-local verticalPanSpeedPtr
-local oringinalVerticalPanSpeed
+function setVerticalPanSpeed(newSpeed)
+	configs.verticalPanSpeed = newSpeed
+	core:setVerticalPanSpeed(newSpeed)
+end
 
-local jittersSig
-local newJitterPtr
-local originalJitterPtr
+function setCameraDistance(newDistance)
+	configs.distance = newDistance
+	core:setCameraDistance(newDistance)
+	if configs.autoCalcVertSpeed then
+		setVerticalPanSpeed(default_settings.verticalPanSpeed * newDistance / 6.0)
+	end
+end
 
-local battleCamRangeSig
-local newBattleCamRangePtr
-local originalBattleCamRangePtr
-local battleCamRangeLockLocation
-local originalBattleRangeLockValues
+function setBattleCameraDistance(newDistance)
+	configs.battleDistance = newDistance
+	core:setBattleDistance(newDistance)
+end
+
+function setBattleCameraRange(newRange)
+	configs.battleRange = math.min(math.max(0, tonumber(newRange)), 100)
+	core:setBattleRange(configs.battleRange)
+end
+
+function setBattleRangeLock(isLocked)
+	configs.battleRangeLocked = isLocked
+	core:setBattleRangeLock(isLocked)
+end
+
+function setDistances()
+	setCameraDistance(configs.distance)
+	setBattleCameraDistance(configs.battleDistance)
+	setHorizontalPanSpeed(configs.horizontalPanSpeed)
+	if not configs.autoCalcVertSpeed then
+		setVerticalPanSpeed(configs.verticalPanSpeed)
+	end
+	setBattleCameraRange(configs.battleRange)
+	setBattleRangeLock(configs.battleRangeLocked)
+end
 
 --[[
 * Updates the addon settings.
@@ -69,8 +114,8 @@ local function update_settings(s)
 
     -- Save the current settings..
     settings.save()
-	
-	setDistances()
+
+	if core.installed then setDistances() end
 end
 
 --[[
@@ -78,181 +123,29 @@ end
 --]]
 settings.register('settings', 'settings_update', update_settings)
 
-function setHorizontalPanSpeed(newSpeed)
-	configs.horizontalPanSpeed = newSpeed 
-	ashita.memory.write_float(horizontalPanSpeedPtr, newSpeed / 100.0)
-end
-
-function setVerticalPanSpeed(newSpeed)
-	configs.verticalPanSpeed = newSpeed
-	ashita.memory.write_float(verticalPanSpeedPtr, newSpeed / 100.0)
-end
-
-function setCameraDistance(newDistance)
-	configs.distance = newDistance
-	ashita.memory.write_float(minDistancePtr, newDistance - (originalMaxDistance - originalMinDistance))
-	ashita.memory.write_float(maxDistancePtr, newDistance)
-
-	if configs.autoCalcVertSpeed then
-		setVerticalPanSpeed(default_settings.verticalPanSpeed * newDistance / 6.0)
-	end
-end
-
-function setBattleCameraDistance(newDistance)
-	configs.battleDistance = newDistance
-	ashita.memory.write_float(minBattleDistancePtr, newDistance - (originalMaxBattleDistance - originalMinBattleDistance))
-	ashita.memory.write_float(maxBattleDistancePtr, newDistance)
-end
-
-function setBattleCameraRange(newRange)
-	configs.battleRange = math.min(math.max(0, tonumber(newRange)), 100)
-	ashita.memory.write_float(newBattleCamRangePtr, configs.battleRange)
-end
-
-function setBattleRangeLock(isLocked)
-	configs.battleRangeLocked = isLocked
-
-	if configs.battleRangeLocked then
-		ashita.memory.write_uint16(battleCamRangeLockLocation, originalBattleRangeLockValues) -- { fld1 (D9E8) }
-	else
-		ashita.memory.write_uint16(battleCamRangeLockLocation, 0x9090)
-	end
-end
-
-function setDistances()
-	-- SET CAMERA DISTANCE BASED ON configs
-	setCameraDistance(configs.distance)
-	
-	-- SET BATTLE DISTANCE BASED ON configs
-	setBattleCameraDistance(configs.battleDistance)
-	
-	-- SET HORIZONTAL PAN SPEED BASED ON configs
-	setHorizontalPanSpeed(configs.horizontalPanSpeed)
-	
-	-- SET VERTICAL PAN SPEED BASED ON configs
-	if not configs.autoCalcVertSpeed then
-		setVerticalPanSpeed(configs.verticalPanSpeed)
-	end
-	
-	setBattleCameraRange(configs.battleRange)
-	setBattleRangeLock(configs.battleRangeLocked)
-end
-
 ----------------------------------------------------------------------------------------------------
 -- func: load
 -- desc: Event called when the addon is being loaded.
 ----------------------------------------------------------------------------------------------------
 ashita.events.register('load', 'camera_load', function()
-	--GET MIN CAMERA DISTANCE
-	local minDistanceSig = ashita.memory.find('FFXiMain.dll', 0, 'D8C9D9C0D8C1D9C2D80D????????D9C3DCC0D8EB', 0, 0)
-	if (minDistanceSig == 0) then error('Failed to locate minDistanceSig!') end
-	
-	minDistancePtr = ashita.memory.read_uint32(minDistanceSig + 0x0A)
-	originalMinDistance = ashita.memory.read_float(minDistancePtr)
-	ashita.memory.unprotect(minDistancePtr, 4)
-	
-	--GET MAX CAMERA DISTANCE
-	local maxDistanceSig = ashita.memory.find('FFXiMain.dll', 0, 'D9442410D825????????51D80D', 0, 0)
-	if (maxDistanceSig == 0) then error('Failed to locate maxDistanceSig!') end
-	
-	maxDistancePtr = ashita.memory.read_uint32(maxDistanceSig + 0x06)
-	originalMaxDistance = ashita.memory.read_float(maxDistancePtr)
-	ashita.memory.unprotect(maxDistancePtr, 4)
-	
-	-- GET MIN BATTLE DISTANCE
-	local minBattleDistanceSig = ashita.memory.find('FFXiMain.dll', 0, '5152D8442424D905????????D8C1', 0, 0)
-	if (minBattleDistanceSig == 0) then error('Failed to locate minBattleDistanceSig!') end
-	
-	minBattleDistancePtr = ashita.memory.read_uint32(minBattleDistanceSig + 0x08)
-	originalMinBattleDistance = ashita.memory.read_float(minBattleDistancePtr)
-	ashita.memory.unprotect(minBattleDistancePtr, 4)
-	
-	-- GET MAX BATTLE DISTANCE
-	local battleMaxDistanceSig = ashita.memory.find('FFXiMain.dll', 0, 'D8C1D8CAD95C2450D805????????D8C9', 0, 0)
-	if (battleMaxDistanceSig == 0) then error('Failed to locate battleMaxDistanceSig!') end
-	
-	maxBattleDistancePtr = ashita.memory.read_uint32(battleMaxDistanceSig + 0x0A)
-	originalMaxBattleDistance = ashita.memory.read_float(maxBattleDistancePtr)
-	ashita.memory.unprotect(maxBattleDistancePtr, 4)
-	
-	-- GET LOCATION OF ZOOM LENS SETUP
-	zoomSetupSig = ashita.memory.find('FFXiMain.dll', 0, '85C0741AD9442404D80D????????D80D????????D87C', 0, 0)
-	if (zoomSetupSig == 0) then error('Failed to locate zoomSetupSig!') end
-	
-	originalMinDistancePtr = ashita.memory.read_uint32(zoomSetupSig + 0x10)
-	newMinDistanceConstant = ashita.memory.alloc(4)
-    ashita.memory.write_float(newMinDistanceConstant, originalMinDistance)
-	
-	-- Write new memloc to zoom setup function to fix zone-in bug
-	ashita.memory.write_uint32(zoomSetupSig + 0x10, newMinDistanceConstant)
-	
-	-- GET LOCATION OF WALK ANIMATION
-	walkAnimationSig = ashita.memory.find('FFXiMain.dll', 0, '0F85????????D80D????????D913D81D', 0, 0)
-	if (walkAnimationSig == 0) then error('Failed to locate walkAnimationSig!') end
-	
-	-- Write new memloc to walk animation
-	ashita.memory.write_uint32(walkAnimationSig + 0x08, newMinDistanceConstant)
-	
-	-- GET LOCATION OF NPC WALK ANIMATION
-	npcWalkAnimationSig = ashita.memory.find('FFXiMain.dll', 0, '7514D9442410D80D????????D91B8B8E', 0, 0)
-	if (npcWalkAnimationSig == 0) then error('Failed to locate npcWalkAnimationSig!') end
-	
-	-- Write new memloc to npc walk animation
-	ashita.memory.write_uint32(npcWalkAnimationSig + 0x08, newMinDistanceConstant)
-	
-	-- GET LOCATION OF BATTLE SOUND CALCULATION
-	battleSoundSig = ashita.memory.find('FFXiMain.dll', 0, 'D95C2414741B487410D9442410D80D', 0, 0)
-	if (battleSoundSig == 0) then error('Failed to locate battleSoundSig!') end
-	
-	-- Write new memloc to npc walk animation
-	ashita.memory.write_uint32(battleSoundSig + 0x0F, newMinDistanceConstant)
-	
-	-- Horizontal Cam Pan Speed
-	local hPanSpeedSig = ashita.memory.find('FFXiMain.dll', 0, 'D84C24208B068BCED80D', 0, 0)
-	if (hPanSpeedSig == 0) then error('Failed to locate hPanSpeedSig!') end
-	
-	horizontalPanSpeedPtr = ashita.memory.read_uint32(hPanSpeedSig + 0x0A)
-	oringinalHorizontalPanSpeed = ashita.memory.read_float(horizontalPanSpeedPtr)
-	
-	-- Vertical Cam Pan Speed
-	local vPanSpeedSig = ashita.memory.find('FFXiMain.dll', 0, 'D84C24248B168BCED80D', 0, 0)
-	if (vPanSpeedSig == 0) then error('Failed to locate vPanSpeedSig!') end
-	
-	verticalPanSpeedPtr = ashita.memory.read_uint32(vPanSpeedSig + 0x0A)
-	oringinalVerticalPanSpeed = ashita.memory.read_float(verticalPanSpeedPtr)
-	
-	-- Camera jitters
-	jittersSig = ashita.memory.find('FFXiMain.dll', 0, '8D54242C8D44242CD8C9525550', 0, 0)
-	if (jittersSig == 0) then error('Failed to locate jittersSig!') end
-	
-	newJitterPtr = ashita.memory.alloc(4)
-    ashita.memory.write_float(newJitterPtr, 1.0) -- 1.0 eliminates the 0.125 multiplier that shrinks the camera distance
-	
-	originalJitterPtr = ashita.memory.read_uint32(jittersSig + 0x0F)
-	
-	ashita.memory.write_uint32(jittersSig + 0x0F, newJitterPtr)
-	ashita.memory.write_uint32(jittersSig + 0x1F, newJitterPtr)
-	
-	-- Battle Camera Range
-	battleCamRangeSig = ashita.memory.find('FFXiMain.dll', 0, 'D8C9D99C24DC000000DDD8D9442450D8442428D83D', 0, 0)
-	if (battleCamRangeSig == 0) then error('Failed to locate battleCamRangeSig!') end
-	
-	originalBattleCamRangePtr = ashita.memory.read_uint32(battleCamRangeSig + 0x15)	
-	newBattleCamRangePtr = ashita.memory.alloc(4)
-	ashita.memory.write_float(newBattleCamRangePtr, ashita.memory.read_float(originalBattleCamRangePtr)) -- write the original value to new memloc
-	ashita.memory.write_uint32(battleCamRangeSig + 0x15, newBattleCamRangePtr)
-	
-	-- find battle range lock and save original values
-	battleCamRangeLockLocation = battleCamRangeSig + 0x19
-	originalBattleRangeLockValues = ashita.memory.read_uint16(battleCamRangeLockLocation)
-		
-	setDistances()
+	if core:install() then
+		setDistances()
+	else
+		local off = {}
+		for _, g in ipairs(core:groupStatus()) do
+			if g.required and not g.enabled then off[#off + 1] = g.name end
+		end
+		print('[xicamera] WARN: not every patch group is in (' .. table.concat(off, ', ') .. '); see /cam ui for details')
+		setDistances()   -- groups that are in still follow the settings
+	end
 end)
 
 ashita.events.register('command', 'camera_command', function(e)
     local command_args = e.command:lower():args()
     if table.contains({'/camera', '/cam', '/xicamera', '/xicam'}, command_args[1]) then
-        if table.contains({'distance', 'd'}, command_args[2]) then
+        if (command_args[2] == nil or table.contains({'ui', 'settings'}, command_args[2])) then
+            ui.is_open[1] = not ui.is_open[1]
+        elseif table.contains({'distance', 'd'}, command_args[2]) then
             if (tonumber(command_args[3])) then
                 local newDistance = tonumber(command_args[3])
                 setCameraDistance(newDistance)
@@ -280,6 +173,16 @@ ashita.events.register('command', 'camera_command', function(e)
 				setVerticalPanSpeed(newSpeed)
 				update_settings()
                 print("Vertical pan speed changed to " .. newSpeed)
+            end
+		elseif table.contains({'vheight', 'vh', 'snapheight', 'sh'}, command_args[2]) then
+            if (tonumber(command_args[3])) then
+                local offset = tonumber(command_args[3])
+				local cameraY, referenceY = core:snapHeight(offset)
+				if (cameraY ~= nil) then
+					print(string.format("Camera height snapped to %.2f (reference %.2f + %.2f)", cameraY, referenceY, offset))
+				else
+					print("[xicamera] WARN: camera task not available; vertical snap failed")
+				end
             end
 		elseif table.contains({'brange', 'br'}, command_args[2]) then
             if (tonumber(command_args[3])) then
@@ -316,11 +219,13 @@ ashita.events.register('command', 'camera_command', function(e)
 			print("autoCalcVertSpeed changed to " .. tostring(configs.autoCalcVertSpeed))
 			update_settings()
         elseif table.contains({'help', 'h'}, command_args[2]) then
+            print("Toggle Settings Window: </camera|/cam> [ui]")
             print("Set Distance: </camera|/cam> <distance|d> <###> - FFXI Default: 6")
 			print("Set Battle Distance: </camera|/cam> <battle|b> <###> - FFXI Default 8")
 			print("Set Battle Camera Range: </camera|/cam> <brange|br> <###> - FFXI Default: 4, min: 0, max: 100, forces battle range lock on")
 			print("Set Horizontal Pan Speed: </camera|/cam> <hspeed|hs> <###> - FFXI Default 3")
 			print("Set Vertical Pan Speed: </camera|/cam> <vspeed|vs> <###> - FFXI Default: 10, forces auto calc off")
+			print("Snap Vertical Height: </camera|/cam> <vheight|vh> <offset> - camera Y = reference Y + offset")
 			print("Unlock Battle Camera Range: </camera|/cam> <battlelock|bl> <on|true|1|off|false|0>")
 			print("Increments Distance: </camera|/cam> <incr|in>")
 			print("Decrements Distance: </camera|/cam> <de|decr>")
@@ -331,69 +236,195 @@ ashita.events.register('command', 'camera_command', function(e)
             print("Status: </camera|/cam> <status|s>")
 		elseif table.contains({'status', 's'}, command_args[2]) then
 			print("- status")
+			print("-  active: " .. tostring(core:active()))
 			print("-  cameraDistance: " .. configs.distance)
 			print("-  battleDistance: " .. configs.battleDistance)
 			print("-  battleRange: " .. configs.battleRange)
 			print("-  horizontalPanSpeed: " .. configs.horizontalPanSpeed)
 			print("-  verticalPanSpeed: " .. configs.verticalPanSpeed)
+			local cameraY, referenceY = core:cameraHeights()
+			if (cameraY ~= nil) then
+				print(string.format("-  cameraY: %.2f", cameraY))
+				print(string.format("-  referenceY: %.2f", referenceY))
+			end
 			print("-  battleRangeLocked: " .. tostring(configs.battleRangeLocked))
 			print("-  saveOnIncrement: " .. tostring(configs.saveOnIncrement))
 			print("-  autoCalcVertSpeed: " .. tostring(configs.autoCalcVertSpeed))
+			for _, site in ipairs(core:status(true)) do
+				if site.state ~= 'patched' then
+					print(string.format("-  %s: %s%s", site.name, site.state, site.note and (' (' .. site.note .. ')') or ''))
+				end
+			end
         end
     end
 
     return false
 end)
 
-local restorePointers = function()
-	if (minDistancePtr ~= 0 and minDistancePtr ~= nil) then
-		ashita.memory.write_float(minDistancePtr, originalMinDistance)
-	end
-	if (maxDistancePtr ~= 0 and maxDistancePtr ~= nil) then
-		ashita.memory.write_float(maxDistancePtr, originalMaxDistance)
-	end
-	if (minBattleDistancePtr ~= 0 and minBattleDistancePtr ~= nil) then
-		ashita.memory.write_float(minBattleDistancePtr, originalMinBattleDistance)
-	end
-	if (maxBattleDistancePtr ~= 0 and maxBattleDistancePtr ~= nil) then
-		ashita.memory.write_float(maxBattleDistancePtr, originalMaxBattleDistance)
-	end
-	if (horizontalPanSpeedPtr ~= 0 and horizontalPanSpeedPtr ~= nil) then
-		ashita.memory.write_float(horizontalPanSpeedPtr, oringinalHorizontalPanSpeed)
-	end
-	if (verticalPanSpeedPtr ~= 0 and verticalPanSpeedPtr ~= nil) then
-		ashita.memory.write_float(verticalPanSpeedPtr, oringinalVerticalPanSpeed)
-	end
-	if (zoomSetupSig ~= 0 and zoomSetupSig ~= nil) then
-		ashita.memory.write_uint32(zoomSetupSig + 0x10, originalMinDistancePtr)
-		ashita.memory.dealloc(newMinDistanceConstant, 4)
-	end
-	if (walkAnimationSig ~= 0 and walkAnimationSig ~= nil) then
-		ashita.memory.write_uint32(walkAnimationSig + 0x08, originalMinDistancePtr)
-		ashita.memory.dealloc(newMinDistanceConstant, 4)
-	end
-	if (npcWalkAnimationSig ~= 0 and npcWalkAnimationSig ~= nil) then
-		ashita.memory.write_uint32(npcWalkAnimationSig + 0x08, originalMinDistancePtr)
-		ashita.memory.dealloc(newMinDistanceConstant, 4)
-	end
-	if (battleSoundSig ~= 0 and battleSoundSig ~= nil) then
-		ashita.memory.write_uint32(battleSoundSig + 0x0F, originalMinDistancePtr)
-		ashita.memory.dealloc(newMinDistanceConstant, 4)
-	end
-	if (jittersSig ~= 0 and jittersSig ~= nil) then
-		ashita.memory.write_uint32(jittersSig + 0x0F, originalJitterPtr)
-		ashita.memory.write_uint32(jittersSig + 0x1F, originalJitterPtr)
-		ashita.memory.dealloc(newJitterPtr, 4)
-	end
-	if (battleCamRangeSig ~= 0 and battleCamRangeSig ~= nil) then
-		ashita.memory.write_uint32(battleCamRangeSig + 0x15, originalBattleCamRangePtr)
-		ashita.memory.dealloc(newBattleCamRangePtr, 4)
-		
-		if originalBattleRangeLockValues ~= ashita.memory.read_uint16(battleCamRangeLockLocation) then
-			ashita.memory.write_uint16(battleCamRangeLockLocation, originalBattleRangeLockValues) -- { fld1 (D9E8) }
+----------------------------------------------------------------------------------------------------
+-- Settings window
+----------------------------------------------------------------------------------------------------
+local headerColor = { 1.0, 0.65, 0.26, 1.0 }
+local okColor     = { 0.55, 0.85, 0.55, 1.0 }
+local warnColor   = { 0.95, 0.80, 0.40, 1.0 }
+local badColor    = { 0.95, 0.45, 0.45, 1.0 }
+
+-- Chat commands change configs directly, so the widgets re-read it every frame.
+local function syncUiFromConfigs()
+	ui.distance[1]           = configs.distance
+	ui.battleDistance[1]     = configs.battleDistance
+	ui.battleRange[1]        = configs.battleRange
+	ui.battleRangeLocked[1]  = configs.battleRangeLocked
+	ui.horizontalPanSpeed[1] = configs.horizontalPanSpeed
+	ui.verticalPanSpeed[1]   = configs.verticalPanSpeed
+	ui.autoCalcVertSpeed[1]  = configs.autoCalcVertSpeed
+	ui.saveOnIncrement[1]    = configs.saveOnIncrement
+end
+
+-- A slider that applies every change to the game at once and saves when the drag or edit ends.
+local function sliderFloat(label, ref, min, max, fmt, apply, help)
+	if imgui.SliderFloat(label, ref, min, max, fmt) then apply(ref[1]) end
+	if imgui.IsItemDeactivatedAfterEdit() then update_settings() end
+	if help then imgui.ShowHelp(help) end
+end
+
+local function applyDefaults()
+	configs.autoCalcVertSpeed = default_settings.autoCalcVertSpeed
+	configs.saveOnIncrement = default_settings.saveOnIncrement
+	setCameraDistance(default_settings.distance)
+	if not configs.autoCalcVertSpeed then setVerticalPanSpeed(default_settings.verticalPanSpeed) end
+	setBattleCameraDistance(default_settings.battleDistance)
+	setHorizontalPanSpeed(default_settings.horizontalPanSpeed)
+	setBattleCameraRange(default_settings.battleRange)
+	setBattleRangeLock(default_settings.battleRangeLocked)
+	update_settings()
+end
+
+local stateColors = { patched = okColor, restored = okColor, neutral = warnColor, skipped = warnColor, reverted = warnColor }
+
+local function drawPatchStatus()
+	if not imgui.CollapsingHeader('Patch status') then return end
+	-- the list shows the state as of load or the last refresh; reading the sites is on request only
+	if imgui.Button('Refresh') then core:refresh() end
+	imgui.SameLine()
+	imgui.TextDisabled('re-reads the patch sites; changes nothing')
+	for _, g in ipairs(core:groupStatus()) do
+		if not g.enabled then
+			imgui.TextColored(g.required and badColor or warnColor, g.name .. ' group off: ' .. tostring(g.why))
 		end
 	end
+	local rows = core:status()
+	if #rows == 0 then imgui.TextDisabled('No signatures scanned yet.') return end
+	for _, site in ipairs(rows) do
+		imgui.TextColored(stateColors[site.state] or badColor, string.format('%-8s', site.state))
+		imgui.SameLine()
+		imgui.Text(site.name)
+		if site.note then
+			imgui.SameLine()
+			imgui.TextDisabled('- ' .. site.note)
+		end
+	end
+	imgui.TextDisabled('neutral: another tool already holds the value XICamera uses, so it is left alone.')
 end
+
+local function drawSettings()
+	imgui.PushItemWidth(240)
+
+	imgui.TextColored(headerColor, 'Camera')
+	imgui.Separator()
+	sliderFloat('Distance', ui.distance, 1.0, 40.0, '%.1f', setCameraDistance,
+		'Third-person camera distance. FFXI default: 6.\n\nCtrl+click to type a value.')
+	sliderFloat('Horizontal pan speed', ui.horizontalPanSpeed, 0.5, 20.0, '%.1f', setHorizontalPanSpeed,
+		'Left/right camera pan speed. FFXI default: 3.')
+	if imgui.Checkbox('Auto-calculate vertical pan speed', ui.autoCalcVertSpeed) then
+		configs.autoCalcVertSpeed = ui.autoCalcVertSpeed[1]
+		if configs.autoCalcVertSpeed then setCameraDistance(configs.distance) end
+		update_settings()
+	end
+	imgui.ShowHelp('Scales the vertical pan speed with the camera distance.\nSetting the vertical speed by hand turns this off.')
+	if imgui.SliderFloat('Vertical pan speed', ui.verticalPanSpeed, 0.5, 40.0, '%.1f') then
+		configs.autoCalcVertSpeed = false
+		setVerticalPanSpeed(ui.verticalPanSpeed[1])
+	end
+	if imgui.IsItemDeactivatedAfterEdit() then update_settings() end
+	imgui.ShowHelp('Up/down camera pan speed. FFXI default: 10.7.')
+	if configs.autoCalcVertSpeed then
+		imgui.TextDisabled(string.format('auto: %.1f for distance %.1f', configs.verticalPanSpeed, configs.distance))
+	end
+
+	imgui.Spacing()
+	imgui.TextColored(headerColor, 'Battle camera')
+	imgui.Separator()
+	sliderFloat('Battle distance', ui.battleDistance, 1.0, 40.0, '%.1f', setBattleCameraDistance,
+		'Camera distance while engaged. FFXI default: 8.2.')
+	sliderFloat('Battle range', ui.battleRange, 0.0, 100.0, '%.0f',
+		function(v) setBattleRangeLock(true) setBattleCameraRange(v) end,
+		'How far the battle camera may swing around the target: about 180 degrees at 100. FFXI default: 4.\nChanging it turns the range lock on.')
+	if imgui.Checkbox('Lock battle range', ui.battleRangeLocked) then
+		setBattleRangeLock(ui.battleRangeLocked[1])
+		update_settings()
+	end
+	imgui.ShowHelp('Off lets the battle camera rotate 360 degrees around the target.')
+
+	imgui.Spacing()
+	imgui.TextColored(headerColor, 'Camera height')
+	imgui.Separator()
+	imgui.InputFloat('Height offset', ui.heightOffset, 0.1, 1.0, '%.2f')
+	imgui.ShowHelp('Camera Y = reference Y + offset. Applied once; the game keeps moving the camera afterwards.')
+	if imgui.Button('Snap height') then
+		local cameraY, referenceY = core:snapHeight(ui.heightOffset[1])
+		if cameraY ~= nil then
+			ui.lastSnap = string.format('Snapped to %.2f (reference %.2f)', cameraY, referenceY)
+		else
+			ui.lastSnap = 'Camera task not available'
+		end
+	end
+	local cameraY, referenceY = core:cameraHeights()
+	if cameraY ~= nil then
+		imgui.SameLine()
+		imgui.TextDisabled(string.format('camera Y %.2f, reference Y %.2f', cameraY, referenceY))
+	end
+	if ui.lastSnap ~= nil then imgui.TextDisabled(ui.lastSnap) end
+
+	imgui.Spacing()
+	imgui.TextColored(headerColor, 'Options')
+	imgui.Separator()
+	if imgui.Checkbox('Save on increment/decrement', ui.saveOnIncrement) then
+		configs.saveOnIncrement = ui.saveOnIncrement[1]
+		update_settings()
+	end
+	imgui.ShowHelp('Saves settings when incr, decr, bincr or bdecr change a distance.')
+	imgui.PopItemWidth()
+
+	imgui.Spacing()
+	if imgui.Button('Save') then update_settings() end
+	imgui.SameLine()
+	if imgui.Button('Reset to defaults') then applyDefaults() end
+	imgui.SameLine()
+	imgui.TextDisabled('Settings save per character.')
+end
+
+local function drawSettingsWindow()
+	if not ui.is_open[1] then return end
+	syncUiFromConfigs()
+
+	imgui.SetNextWindowSize({ 460, 0 }, ImGuiCond_FirstUseEver)
+	-- ### keeps the window's saved position across version bumps.
+	if imgui.Begin('XICamera v' .. addon.version .. '###xicamera_settings', ui.is_open, ImGuiWindowFlags_AlwaysAutoResize) then
+		if not core.installed then
+			imgui.TextColored(badColor, 'XICamera is not active: the float block could not be allocated.')
+		elseif not core:active() then
+			imgui.TextColored(warnColor, 'Some patch groups are off; those settings have no effect. See Patch status.')
+			imgui.Separator()
+		end
+		if core.installed then drawSettings() end
+		imgui.Spacing()
+		drawPatchStatus()
+	end
+	imgui.End()
+end
+
+ashita.events.register('d3d_present', 'camera_present', drawSettingsWindow)
 
 ----------------------------------------------------------------------------------------------------
 -- func: unload
@@ -402,5 +433,5 @@ end
 ashita.events.register('unload', 'camera_unload', function()
     -- Save the configuration file..
     update_settings()
-    restorePointers()
+    core:uninstall()
 end)

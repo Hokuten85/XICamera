@@ -1,17 +1,33 @@
 ## About
 
-XICamera for **Ashita v3** changes the third-person camera: distance, battle distance, pan speeds, battle camera range and lock, a one-shot height snap, and removal of the camera jitter against walls.
+XICamera for **Windower 4** changes the third-person camera: distance, battle distance, pan speeds, battle camera range and lock, a one-shot height snap, and removal of the camera jitter against walls.
 
 ## Setup
 
-1. Extract the zip into your Ashita 3 `addons` folder. You should end up with `addons/xicamera/xicamera.lua` and `addons/xicamera/xicamera_core.lua` next to each other; both files are needed.
-2. In game: `/addon load xicamera`.
+1. Extract the zip into your Windower `addons` folder. You should end up with `addons/XICamera/` containing `XICamera.lua`, `lib/xicamera_core.lua`, `lib/windower_native.lua` and `libs/_WindowerMemory.dll`. If you're upgrading, an old `libs/_XICamera.dll` can be deleted; nothing loads it any more.
+2. In game: `//lua load xicamera`.
 
-Settings save to `addons/xicamera/settings/settings.json`.
+The DLL comes from [WindowerMemory](https://github.com/Hokuten85/WindowerMemory) and only provides memory primitives to Lua (scan, read, write, allocate, and an atomic compare-exchange); every camera decision is in the Lua files. Settings save to `addons/XICamera/data/settings.xml`:
+
+```xml
+<?xml version="1.1" ?>
+<settings>
+    <global>
+        <cameraDistance>6</cameraDistance>
+        <battleDistance>8.2</battleDistance>
+        <horizontalPanSpeed>3</horizontalPanSpeed>
+        <verticalPanSpeed>10.7</verticalPanSpeed>
+        <battleRange>4</battleRange>
+        <battleRangeLocked>true</battleRangeLocked>
+        <autoCalcVertSpeed>true</autoCalcVertSpeed>
+        <saveOnIncrement>false</saveOnIncrement>
+    </global>
+</settings>
+```
 
 ## In-Game commands
 
-`/camera`, `/cam`, `/xicamera` and `/xicam` all work. Parameters:
+`//camera`, `//cam`, `//xicamera` and `//xicam` all work. Parameters:
 
 - d/distance #           -- camera distance - default: 6
 - b/battle #             -- battle camera distance - default: 8.2
@@ -31,7 +47,7 @@ Settings save to `addons/xicamera/settings/settings.json`.
 
 ## Running next to other tools
 
-XICamera never overwrites the client's own constants; it points the camera code at floats it owns, and only while the bytes at each site are the ones it found. A site another tool already changed is left alone and listed by `/cam status` as `owned`, `neutral` or `foreign`.
+XICamera never overwrites the client's own constants; it points the camera code at floats it owns, and only while the bytes at each site are the ones it found. A site another tool already changed is left alone and listed by `//cam status` as `owned`, `neutral` or `foreign`.
 
 ## What changed in 0.8
 

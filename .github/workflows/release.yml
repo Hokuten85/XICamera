@@ -1,0 +1,96 @@
+#  Packages the four launcher bundles and publishes a GitHub release. The
+#  Windower 4 bundle's _WindowerMemory.dll comes from the WindowerMemory release
+#  pinned in windowermemory.json (https://github.com/Hokuten85/WindowerMemory).
+#
+#  Triggers:
+#    * pushing a tag `v<version>`: the release is named after the tag, and is
+#      a pre-release when the version has a suffix (v0.8.0-pre1, v0.9.0-rc2).
+#      An annotated tag's message is the release notes, as written: keep it to
+#      what changed for players. A plain tag gets GitHub's generated notes.
+#      Create it with `git tag -a --cleanup=verbatim` or git strips the
+#      markdown headings (lines starting with #) as comments.
+#    * "Run workflow" with a version and a pre-release switch, for a release
+#      cut from any branch without tagging first (the tag is created for you).
+#
+#  The Lua bundles pack straight from the tree, so the version people see
+#  in-game is addon.version in the Lua files; keep it in step with the tag.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version without the v, e.g. 0.8.0-pre1'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as a pre-release'
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version and release kind
+        id: ver
+        shell: pwsh
+        run: |
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            $version = '${{ inputs.version }}'.TrimStart('v')
+            $pre = '${{ inputs.prerelease }}' -eq 'true'
+          } else {
+            $version = '${{ github.ref_name }}'.TrimStart('v')
+            $pre = $version -match '-'
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+          "prerelease=$($pre.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          Write-Host "version $version, pre-release: $pre"
+
+      - name: Package the four bundles
+        shell: pwsh
+        run: ./tools/package_release.ps1 -Version '${{ steps.ver.outputs.version }}'
+
+      - name: Release notes
+        id: notes
+        shell: pwsh
+        run: |
+          $tag = '${{ steps.ver.outputs.tag }}'
+          $notes = ''
+          if ('${{ github.event_name }}' -eq 'push') {
+            # actions/checkout can leave the tag as a lightweight ref, whose "contents" is the
+            # commit message; fetch the real tag object and use it only if it is annotated
+            git fetch --force origin "refs/tags/${tag}:refs/tags/${tag}" 2>$null
+            if ((git cat-file -t $tag) -eq 'tag') {
+              $notes = (git for-each-ref "refs/tags/$tag" --format='%(contents)') -join "`n"
+            }
+          }
+          if (-not $notes.Trim()) { "generate=true" >> $env:GITHUB_OUTPUT }
+          else { "generate=false" >> $env:GITHUB_OUTPUT }
+          Set-Content -Path build/dist/NOTES.md -Value $notes.Trim() -Encoding utf8
+
+      - name: Publish
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = '${{ steps.ver.outputs.tag }}'
+          $args = @('release', 'create', $tag, '--title', "XICamera v${{ steps.ver.outputs.version }}", '--notes-file', 'build/dist/NOTES.md')
+          if ('${{ steps.ver.outputs.prerelease }}' -eq 'true') { $args += '--prerelease' }
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch') { $args += @('--target', '${{ github.sha }}') }
+          if ('${{ steps.notes.outputs.generate }}' -eq 'true') { $args += '--generate-notes' }
+          $args += Get-ChildItem build/dist/*.zip | ForEach-Object { $_.FullName }
+          $args += 'build/dist/SHA256SUMS.txt'
+          gh @args

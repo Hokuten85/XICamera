@@ -1,17 +1,17 @@
 ## About
 
-XICamera for **Ashita v3** changes the third-person camera: distance, battle distance, pan speeds, battle camera range and lock, a one-shot height snap, and removal of the camera jitter against walls.
+XICamera for **Windower 5** changes the third-person camera: distance, battle distance, pan speeds, battle camera range and lock, a one-shot height snap, and removal of the camera jitter against walls.
 
 ## Setup
 
-1. Extract the zip into your Ashita 3 `addons` folder. You should end up with `addons/xicamera/xicamera.lua` and `addons/xicamera/xicamera_core.lua` next to each other; both files are needed.
-2. In game: `/addon load xicamera`.
+1. Extract the zip into your Windower 5 `addons` folder. You should end up with `addons/xicamera/` containing `manifest.xml`, `xicamera.lua` and `xicamera_core.lua`; all three are needed.
+2. In game: `//addon load xicamera`.
 
-Settings save to `addons/xicamera/settings/settings.json`.
+Settings save through Windower 5's settings library.
 
 ## In-Game commands
 
-`/camera`, `/cam`, `/xicamera` and `/xicam` all work. Parameters:
+`//camera`, `//cam`, `//xicamera` and `//xicam` all work. Parameters:
 
 - d/distance #           -- camera distance - default: 6
 - b/battle #             -- battle camera distance - default: 8.2
@@ -31,7 +31,7 @@ Settings save to `addons/xicamera/settings/settings.json`.
 
 ## Running next to other tools
 
-XICamera never overwrites the client's own constants; it points the camera code at floats it owns, and only while the bytes at each site are the ones it found. A site another tool already changed is left alone and listed by `/cam status` as `owned`, `neutral` or `foreign`.
+XICamera never overwrites the client's own constants; it points the camera code at floats it owns, and only while the bytes at each site are the ones it found. A site another tool already changed is left alone and listed by `//cam status` as `owned`, `neutral` or `foreign`.
 
 ## What changed in 0.8
 
