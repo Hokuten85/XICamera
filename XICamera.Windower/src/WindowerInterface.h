@@ -47,6 +47,9 @@ private:
     static int lua_write_double(lua_State* L);
     static int lua_write_array(lua_State* L);
     static int lua_write_string(lua_State* L);
+
+    static int lua_compare_exchange_uint32(lua_State* L);
+    static int lua_compare_exchange_uint16(lua_State* L);
 };
 
 } // namespace XICamera

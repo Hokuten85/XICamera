@@ -127,34 +127,46 @@ unless `saveOnIncrement` is on.
 
 ## If a signature fails
 
-The addon logs the failing signature name on load, e.g.:
+The addon logs each site that is not patched on load, and the
+patch group it takes down with it, e.g.:
 
 ```
-[xicamera] could not find max battle camera distance
+[xicamera] min distance: eye follow C: signature not found on this client build
+[xicamera] camera min patch group is off: min distance: eye follow C: signature not found on this client build
+[xicamera] WARN: not every patch group is in (min); see /cam status
 ```
 
-That means the corresponding `findpattern` call returned 0. Causes,
-in order of likelihood:
+Every reader of one constant is a group and a group installs
+all-or-none, so one missing min-distance site turns the whole
+distance setting off rather than patching half of the camera's
+math. `/camera status` lists every site that is not `patched`, with
+its state; on Ashita 4 the settings window's "Patch status" shows
+the same list.
+
+| State | Meaning | What to do |
+|:--|:--|:--|
+| `missing` | the signature did not match | client update; see below |
+| `owned` | another tool replaced the instruction (TrueFPS does this to the vertical jitter push) | expected; the other tool's version of the fix is in |
+| `neutral` | another tool already points the operand at the value XICamera uses | nothing; XICamera leaves it to that tool |
+| `foreign` | another tool points the operand somewhere else | load order or a conflicting camera tool; XICamera leaves it alone |
+| `skipped` | in a group that is off | fix the group's failing site |
+| `refused` | at unload, the site no longer held XICamera's pointer | another tool took it over; nothing was overwritten |
+
+Causes of `missing`, in order of likelihood:
 
 1. **The client was updated** and the function the signature targets
-   was recompiled. Check `docs/CAMERA_PATCH_TARGETS.md` to find which
-   pattern needs a new bytes string. The fix is to update the
-   signature in:
-   - `XICamera.Core/Camera.cpp` (Windower 4)
-   - `Ashita3/addons/xicamera/xicamera.lua` (Ashita 3)
-   - `Ashita4/addons/xicamera/xicamera.lua` (Ashita 4)
-   - `Windower5/addons/xicamera/xicamera.lua` (Windower 5)
-   ...all four. If you find a working pattern in one launcher, copy
-   it byte-for-byte to the other three.
-2. **You loaded XICamera before logging in** (Ashita addons only
-   sometimes — see your launcher docs). Reload the addon after
-   character select.
-3. **Another camera plugin/addon also patches the same site** and
-   ran first, and rewrote the bytes such that our pattern doesn't
-   match anymore. Unload the conflicting addon, then load XICamera.
+   was recompiled. Check `docs/CAMERA_PATCH_TARGETS.md` for the site,
+   find the new bytes in an unpacked client image, and update the
+   row in `Core.SITES` in `Ashita4/addons/xicamera/xicamera_core.lua`.
+   Copy that file verbatim to the Ashita 3, Windower 4 (`lua/lib/`)
+   and Windower 5 folders; `tools/test_core.lua <image>` checks the
+   copies match and exercises every site against the image.
+2. **Another tool rewrote the bytes the signature covers.** Signatures
+   avoid every byte TrueFPS writes, so with TrueFPS this shows up as
+   `owned` or `neutral`, never `missing`; with an unknown tool, unload
+   it and reload XICamera to confirm.
 
-If multiple signatures fail simultaneously, the most likely cause
-is (1) — a client update.
+If several signatures fail at once, the cause is (1).
 
 ## Restore on unload
 
@@ -175,3 +187,21 @@ their stock values; the 2-byte battle-range clamp is restored.
 If you see any leftover patches after unload (e.g. battle camera
 still rotates 360°), that's a bug — please file an issue with the
 exact sequence that produced it.
+
+## Settings window (Ashita 4 only)
+
+**Expect:** `/camera` on its own, or `/camera ui`, toggles an ImGui
+window with every setting above as a slider or checkbox, a height-snap
+control, Save / Reset to defaults buttons, and a collapsible "Patch
+status" list showing each signature as found or missing.
+
+**Quick verify:**
+
+1. `/camera ui` — the window opens. Drag "Distance" to 12: the camera
+   moves while you drag; the settings file is written when you release.
+2. `/camera d 8` in chat — the Distance slider follows the command.
+3. Tick "Auto-calculate vertical pan speed" off and on — the vertical
+   slider becomes editable, then shows the computed value again.
+4. Expand "Patch status" — every row should read `found`. A `missing`
+   row names the signature that did not match this client build.
+5. Close the window with its title-bar X; `/camera` reopens it.

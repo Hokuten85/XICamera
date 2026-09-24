@@ -9,6 +9,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <Psapi.h>
+#include <intrin.h>
 
 #include <cctype>
 #include <cstdint>
@@ -128,10 +129,56 @@ bool TryRead(uintptr_t address, T* out) {
     }
 }
 
+// 2- and 4-byte stores go through a locked exchange so a value another thread is executing
+// or reading never tears, even when the operand is unaligned (x86 honours the lock prefix
+// across a cache line split).
+template <size_t N>
+struct Store {
+    template <typename T>
+    static void run(uintptr_t address, T value) { *reinterpret_cast<T*>(address) = value; }
+};
+template <>
+struct Store<4> {
+    template <typename T>
+    static void run(uintptr_t address, T value) {
+        long bits = 0;
+        std::memcpy(&bits, &value, 4);
+        _InterlockedExchange(reinterpret_cast<volatile long*>(address), bits);
+    }
+};
+template <>
+struct Store<2> {
+    template <typename T>
+    static void run(uintptr_t address, T value) {
+        short bits = 0;
+        std::memcpy(&bits, &value, 2);
+        _InterlockedExchange16(reinterpret_cast<volatile short*>(address), bits);
+    }
+};
+
 template <typename T>
 bool TryWrite(uintptr_t address, T value) {
     __try {
-        *reinterpret_cast<T*>(address) = value;
+        Store<sizeof(T)>::run(address, value);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+// Atomic compare-and-swap; returns the value found (equal to `expected` when the swap went in).
+bool TryCompareExchange32(uintptr_t address, uint32_t expected, uint32_t desired, uint32_t* previous) {
+    __try {
+        *previous = static_cast<uint32_t>(_InterlockedCompareExchange(reinterpret_cast<volatile long*>(address), static_cast<long>(desired), static_cast<long>(expected)));
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+bool TryCompareExchange16(uintptr_t address, uint16_t expected, uint16_t desired, uint16_t* previous) {
+    __try {
+        *previous = static_cast<uint16_t>(_InterlockedCompareExchange16(reinterpret_cast<volatile short*>(address), static_cast<short>(desired), static_cast<short>(expected)));
         return true;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return false;
@@ -314,6 +361,38 @@ int WindowerInterface::lua_write_int64(lua_State* L) { return WriteValue<int64_t
 int WindowerInterface::lua_write_float(lua_State* L) { return WriteValue<float>(L); }
 int WindowerInterface::lua_write_double(lua_State* L) { return WriteValue<double>(L); }
 
+// compare_exchange_uint32(address, expected, desired) -> the value that was there. The swap
+// went in exactly when the result equals `expected`. Returns nil when the address is unreadable.
+int WindowerInterface::lua_compare_exchange_uint32(lua_State* L) {
+    const uintptr_t address = CheckAddress(L, 1);
+    const uint32_t expected = static_cast<uint32_t>(luaL_checknumber(L, 2));
+    const uint32_t desired = static_cast<uint32_t>(luaL_checknumber(L, 3));
+    DWORD oldProtect = 0;
+    if (!MakeWritable(address, sizeof(uint32_t), &oldProtect)) { lua_pushnil(L); return 1; }
+    uint32_t previous = 0;
+    const bool ok = TryCompareExchange32(address, expected, desired, &previous);
+    DWORD ignored = 0;
+    ::VirtualProtect(reinterpret_cast<void*>(address), sizeof(uint32_t), oldProtect, &ignored);
+    if (!ok) { lua_pushnil(L); return 1; }
+    lua_pushnumber(L, static_cast<lua_Number>(previous));
+    return 1;
+}
+
+int WindowerInterface::lua_compare_exchange_uint16(lua_State* L) {
+    const uintptr_t address = CheckAddress(L, 1);
+    const uint16_t expected = static_cast<uint16_t>(luaL_checknumber(L, 2));
+    const uint16_t desired = static_cast<uint16_t>(luaL_checknumber(L, 3));
+    DWORD oldProtect = 0;
+    if (!MakeWritable(address, sizeof(uint16_t), &oldProtect)) { lua_pushnil(L); return 1; }
+    uint16_t previous = 0;
+    const bool ok = TryCompareExchange16(address, expected, desired, &previous);
+    DWORD ignored = 0;
+    ::VirtualProtect(reinterpret_cast<void*>(address), sizeof(uint16_t), oldProtect, &ignored);
+    if (!ok) { lua_pushnil(L); return 1; }
+    lua_pushnumber(L, static_cast<lua_Number>(previous));
+    return 1;
+}
+
 int WindowerInterface::lua_write_array(lua_State* L) {
     const uintptr_t address = CheckAddress(L, 1);
     std::vector<uint8_t> bytes;
@@ -391,6 +470,10 @@ int WindowerInterface::registerInterface(lua_State* L) {
         { "write_int32",       &WindowerInterface::lua_write_int32 },
         { "write_int64",       &WindowerInterface::lua_write_int64 },
         { "write_float",       &WindowerInterface::lua_write_float },
+        { "compare_exchange_uint32", &WindowerInterface::lua_compare_exchange_uint32 },
+        { "cas_uint32",        &WindowerInterface::lua_compare_exchange_uint32 },
+        { "compare_exchange_uint16", &WindowerInterface::lua_compare_exchange_uint16 },
+        { "cas_uint16",        &WindowerInterface::lua_compare_exchange_uint16 },
         { "write_double",      &WindowerInterface::lua_write_double },
         { "write_array",       &WindowerInterface::lua_write_array },
         { "write_string",      &WindowerInterface::lua_write_string },

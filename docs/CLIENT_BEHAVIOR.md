@@ -17,8 +17,8 @@
 | Question                                | Answer                                                              |
 |:----------------------------------------|:--------------------------------------------------------------------|
 | Where is the camera "logical state"?    | A `CMoCameraTask` instance scheduled with the rest of the per-frame task list (string ref at `FFXiMain.dll.c:18448`). |
-| Where are the distance scalars?         | Floats in the data segment, loaded via `D8 0D <addr32>` from a few specific call sites. XICamera overwrites those four floats. |
-| Why are there four "min distance" patch sites? | The min-distance float is *also* read by zoom-on-zone-in setup, walk-anim distance scaling, NPC walk-anim, and battle-sound positioning — four readers. Editing the float alone fixes distance but not the followers; we additionally re-point each of the four `D8 0D` operand slots at our own copy. |
+| Where are the distance scalars?         | Compiler-pooled float literals in `.rdata`, loaded via `D8 0D <addr32>` and friends. The 3.0 "min" is shared with 36 instructions, the 6.0 "max" with 12. XICamera never writes them; it re-points the camera code's reads at floats it owns (see `CAMERA_PATCH_TARGETS.md`). |
+| Why so many "min distance" patch sites? | Every camera-code reader of the pooled 3.0 must move together (nine sites), or a raised distance reaches part of the camera's math and not the rest. The non-camera readers (walk animation, NPC walk animation, battle sound and 24 others) keep the literal; 0.7.x's in-place overwrite changed them all. |
 | Is there a per-frame interpolation?     | Yes. The camera lerps between current and target distance frame-to-frame. We do **not** patch the lerp — we just move the target, and the lerp converges naturally. |
 | What's "battle range"?                  | A separate float that controls the angular sweep of the camera around a locked target. Stock value 4.0; XICamera exposes 0..100. |
 | What's "jitter"?                        | A `0.125` scalar applied to camera distance during quick movement, to give the impression of rapid camera adjustment. We replace with `1.0` (no shrink). |
@@ -83,24 +83,21 @@ Four separate functions also read it:
 | NPC walk animation       | Same logic, NPC variant.                          |
 | Battle sound calculation | Emit-distance attenuation for combat sounds.      |
 
-If you only patch `g_MinCameraAddress`, those four readers continue
-to use the stock min and produce visual hitches — most notably,
-the zone-in flash where the camera snaps to stock min for a frame
-before lerp-ing to whatever max distance you set.
+That was the 0.7.x model, and it was inverted: the literal 3.0 is
+not "the min distance", it is every 3.0 in the client. Of the four
+readers above only zoom-on-zone-in is camera logic; the walk-animation
+and NPC-walk-animation multiplies sit in the locomotion rate function,
+which also *clamps* its rate with the same 3.0 (`0x0C8A40`, a read
+0.7.x did not redirect). Overwriting the literal moved that clamp with
+the camera distance and produced the "NPCs run funny after login"
+report.
 
-XICamera fixes this by re-pointing each of the four `D8 0D` operand
-slots at its own `g_NewMinDistance` copy. After patching:
-
-```
-+----------------------+
-|  g_NewMinDistance    | <-- our own float, equals g_OriginalMinDistance
-+----------------------+
-                            ^   ^   ^   ^
-                            |   |   |   |
-                  zoom_setup walk npc sound  (all four readers)
-```
-
-Editing `g_NewMinDistance` updates all four readers atomically.
+Since 0.8.0 the literal is never written. XICamera owns a `min` float
+and re-points the nine camera-code readers at it (zoom calc, zoom
+setup, five reads in the eye-follow function, one in the battle
+camera); the zone-in flash is covered by the zoom-setup site. Walk
+animation, NPC walk animation and battle sound read the untouched 3.0
+and need no patch. The full reader map is in `TOOL_COMPAT_REVIEW.md`.
 
 ## 4. Pan speeds
 
@@ -139,11 +136,13 @@ the push close the gap in one frame — visible as a hard snap to
 "safe distance" instead of a soft lerp, which empirically
 eliminates the oscillation.
 
-The function actually contains a **second** proximity push (the
-single-axis vertical arm at `VA 0x1001FCD5`) that uses `-0.125` and
-is currently unpatched. See
-[`JITTER_INVESTIGATION.md`](JITTER_INVESTIGATION.md) for the full
-disassembly and a proposed signature to extend the patch.
+The function contains a **second** proximity push (the single-axis
+vertical arm at `VA 0x1001FCD5`) that uses `-0.125`; XICamera
+redirects it to `-1.0` the same way. TrueFPS replaces that whole
+instruction with a call, so XICamera's signature for it stops before
+the instruction and reports the site as another tool's when TrueFPS
+loaded first. See [`JITTER_INVESTIGATION.md`](JITTER_INVESTIGATION.md)
+for the full disassembly.
 
 There's no UX knob for jitter intensity today; it's binary (on by
 default prior to XICamera, off when XICamera is loaded).
@@ -198,16 +197,13 @@ the clamp NOPed, full 360° rotation works.
 |:--------------------------------|:----------------------|:--------------------------------------|
 | `"CMoCameraTask"` string        | `FFXiMain.dll.c:18448` | Camera task class debug name          |
 | `"Camera"` task list entry      | `FFXiMain.dll.c:24725` | Worker-thread task name               |
-| `D8 0D <min_distance_addr>`     | sig 1 (above)          | Min camera distance load              |
-| `D8 25 <max_distance_addr>`     | sig 2                  | Max camera distance load              |
-| `D9 05 <min_battle_addr>`       | sig 3                  | Min battle distance load              |
-| `D8 05 <max_battle_addr>`       | sig 4                  | Max battle distance load              |
-| `D8 0D <h_pan_speed_addr>`      | sig 5                  | Horizontal pan scalar load            |
-| `D8 0D <v_pan_speed_addr>`      | sig 6                  | Vertical pan scalar load              |
-| zoom-on-zone-in `D8 0D` operand | sig 7 +0x10            | Min-distance follower #1              |
-| walk-anim `D8 0D` operand       | sig 8 +0x08            | Min-distance follower #2              |
-| NPC walk-anim `D8 0D` operand   | sig 9 +0x08            | Min-distance follower #3              |
-| battle-sound `D8 0D` operand    | sig 10 +0x0F           | Min-distance follower #4              |
-| jitter `D9 05` slots            | sig 11 +0x0F, +0x1F    | 0.125 jitter scalar                   |
-| battle-range `D8 3D` operand    | sig 12 +0x15           | Battle-camera range float             |
-| battle-range `D9 E8` clamp      | sig 12 +0x19           | 2-byte FPU clamp (NOPed when unlocked) |
+| pooled 3.0 literal              | `.rdata` `0x328D38`    | "min distance"; 36 readers, 9 re-pointed |
+| pooled 6.0 literal              | `.rdata` `0x3293E8`    | "max distance"; 12 readers, 8 re-pointed |
+| min / max battle literals       | `0x3293A8`, `0x3293A4` | one reader each, re-pointed           |
+| pan speed literals              | `0x3293EC`, `0x3293E4` | one reader each, re-pointed           |
+| jitter `D8 0D` operands         | `0x01FD66`, `0x01FD76`, `0x01FCD5` | 0.125 / -0.125 push damping |
+| battle-range `D8 3D` operand    | `0x020342`             | Battle-camera range float             |
+| battle-range `D9 E8` clamp      | `0x020346`             | 2-byte FPU clamp (NOPed when unlocked) |
+| locomotion clamp `fcom [3.0]`   | `0x0C8A40`             | Reads the pooled 3.0; must stay stock |
+
+Per-site signatures and offsets: `CAMERA_PATCH_TARGETS.md`.

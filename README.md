@@ -75,21 +75,26 @@ There is no server-visible signal — XICamera emits no packets.
 
 ```
 XICamera/
-├── XICamera.Core/         shared C++ logic (links into the Windower 4 DLL)
-├── XICamera.Windower/     Windower 4 DLL + lua addon
-├── Ashita3/               Ashita v3 lua addon
-├── Ashita4/               Ashita v4 lua addon
-├── Windower5/             Windower 5 lua addon
+├── Ashita4/addons/xicamera/xicamera_core.lua
+│                          the camera patch logic, shared verbatim by every port
+├── Ashita3/               Ashita v3 lua addon (host + copy of the core)
+├── Ashita4/               Ashita v4 lua addon (host + core + ImGui settings window)
+├── Windower5/             Windower 5 lua addon (host + copy of the core)
+├── XICamera.Windower/     Windower 4: memory-primitive DLL + lua addon (host + copy of the core)
+├── XICamera.Core/         legacy C++ camera logic; no longer built by anything (safe to delete)
 ├── 3rdParty/SDKs/         Windower lua SDK
-├── docs/                  Camera-internals reference + decompile notes
-├── tools/                 Release packaging script + binary-analysis helpers
+├── docs/                  Camera-internals reference + tool-compatibility review
+├── tools/                 Release packaging, binary-analysis helpers, tools/test_core.lua
 └── XICamera.sln           Visual Studio solution
 ```
 
-The Ashita 3, Ashita 4, and Windower 5 implementations are pure
-lua — no native code. The Windower 4 implementation is C++ in
-`XICamera.Core` linked into a DLL (`_XICamera.dll`) the lua side
-loads via `require('_XICamera')`.
+Every port is lua: one shared `xicamera_core.lua` holds the site
+table and all patching rules, and each host supplies a small memory
+adapter plus settings and commands. On Windower 4 the adapter is
+backed by a DLL (`_XICamera.dll`) that exposes memory read, write,
+scan, allocation and an atomic compare-exchange to lua.
+`tools/test_core.lua <unpacked FFXiMain image>` runs the core against
+the real client bytes without the game.
 
 ## Building
 

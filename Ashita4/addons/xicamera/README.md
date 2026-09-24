@@ -11,6 +11,8 @@ XICamera is an addon that allows to change the camera distance.
 XICamera makes the in-game command /camera|/cam|/xicamera|/xicam available to adjust various behaviors of the camera on the fly.
 The following parameters are supported:
 
+- ui                     -- toggles the settings window (/cam on its own does the same)
+
 - d/distance #           -- will change the camera distance - default: 6
 - b/battle #             -- will change the battle camera distance - default: 8.2
 - hs/hspeed #            -- will change the horizontal panning speed - default: 3

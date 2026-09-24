@@ -1,9 +1,9 @@
 --[[
     XICamera - Windower 4 addon
 
-    Camera patch logic lives in Lua and uses the generic _XICamera.memory
-    helpers exported by the Windower DLL. This mirrors the Ashita addon model:
-    native code only provides memory read/write/search/allocation primitives.
+    Camera patch logic lives in the shared xicamera_core.lua (lib/), driven through the generic
+    memory helpers exported by the Windower DLL. Native code only provides memory
+    read/write/search/allocation primitives and an atomic compare-exchange.
 ]]
 
 _addon.name = 'XICamera'
@@ -34,69 +34,46 @@ package.cpath = package.cpath .. ';' .. addon_path .. '/libs/?.dll'
 package.path = package.path .. ';' .. addon_path .. '/lib/?.lua'
 
 local native = require('windower_native')
-local mem = native.memory
-local initialized = false
+local Core = require('xicamera_core')
+local raw = native.memory
 
-local state = {
-    minDistancePtr = nil,
-    originalMinDistance = nil,
-    maxDistancePtr = nil,
-    originalMaxDistance = nil,
-    minBattleDistancePtr = nil,
-    originalMinBattleDistance = nil,
-    maxBattleDistancePtr = nil,
-    originalMaxBattleDistance = nil,
-    horizontalPanSpeedPtr = nil,
-    originalHorizontalPanSpeed = nil,
-    verticalPanSpeedPtr = nil,
-    originalVerticalPanSpeed = nil,
-
-    zoomSetupSig = nil,
-    walkAnimationSig = nil,
-    npcWalkAnimationSig = nil,
-    battleSoundSig = nil,
-    originalMinDistancePtr = nil,
-    newMinDistanceConstant = nil,
-
-    jittersSig = nil,
-    originalJitterPtr = nil,
-    newJitterPtr = nil,
-    jittersPush1Sig = nil,
-    originalJitterPush1Ptr = nil,
-    newJitterNegPtr = nil,
-
-    battleCamRangeSig = nil,
-    originalBattleCamRangePtr = nil,
-    newBattleCamRangePtr = nil,
-    battleCamRangeLockLocation = nil,
-    originalBattleRangeLockValues = nil,
-
-    cameraManagerGlobalPtr = nil,
+local mem = {
+    find        = function(sig) return raw.find('FFXiMain.dll', 0, sig, 0, 0) end,
+    read_u16    = function(a) return raw.read_uint16(a) end,
+    read_u32    = function(a) return raw.read_uint32(a) end,
+    read_float  = function(a) return raw.read_float(a) end,
+    write_u16   = function(a, v) raw.write_uint16(a, v) end,
+    write_u32   = function(a, v) raw.write_uint32(a, v) end,
+    write_float = function(a, v) raw.write_float(a, v) end,
+    alloc       = function(size) return native.alloc(size) end,
+    log         = function(text) native.chat(167, text) end,
 }
+-- the DLL's atomic swap, when this build of it has one
+if raw.compare_exchange_uint32 then
+    mem.cas_u32 = function(a, expected, v) return raw.compare_exchange_uint32(a, expected, v) end
+end
+do
+    local base, size = raw.get_base('FFXiMain.dll'), raw.get_size('FFXiMain.dll')
+    if base and base ~= 0 and size and size ~= 0 then
+        mem.image_base, mem.image_size = base, size
+    end
+end
+
+local core = Core.new(mem)
 
 local function setHorizontalPanSpeed(newSpeed)
     settings.horizontalPanSpeed = newSpeed
-    if state.horizontalPanSpeedPtr then
-        mem.write_float(state.horizontalPanSpeedPtr, newSpeed / 100.0)
-    end
+    core:setHorizontalPanSpeed(newSpeed)
 end
 
 local function setVerticalPanSpeed(newSpeed)
     settings.verticalPanSpeed = newSpeed
-    if state.verticalPanSpeedPtr then
-        mem.write_float(state.verticalPanSpeedPtr, newSpeed / 100.0)
-    end
+    core:setVerticalPanSpeed(newSpeed)
 end
 
 local function setCameraDistance(newDistance)
     settings.cameraDistance = newDistance
-    if state.minDistancePtr and state.maxDistancePtr then
-        mem.write_float(state.minDistancePtr, newDistance - (state.originalMaxDistance - state.originalMinDistance))
-        mem.write_float(state.maxDistancePtr, newDistance)
-    end
-    if state.newMinDistanceConstant then
-        mem.write_float(state.newMinDistanceConstant, newDistance - (state.originalMaxDistance - state.originalMinDistance))
-    end
+    core:setCameraDistance(newDistance)
     if settings.autoCalcVertSpeed then
         setVerticalPanSpeed(defaults.verticalPanSpeed * newDistance / 6.0)
     end
@@ -104,45 +81,17 @@ end
 
 local function setBattleCameraDistance(newDistance)
     settings.battleDistance = newDistance
-    if state.minBattleDistancePtr and state.maxBattleDistancePtr then
-        mem.write_float(state.minBattleDistancePtr, newDistance - (state.originalMaxBattleDistance - state.originalMinBattleDistance))
-        mem.write_float(state.maxBattleDistancePtr, newDistance)
-    end
+    core:setBattleDistance(newDistance)
 end
 
 local function setBattleCameraRange(newRange)
     settings.battleRange = math.min(math.max(0, tonumber(newRange) or 0), 100)
-    if state.newBattleCamRangePtr then
-        mem.write_float(state.newBattleCamRangePtr, settings.battleRange)
-    end
+    core:setBattleRange(settings.battleRange)
 end
 
 local function setBattleRangeLock(isLocked)
     settings.battleRangeLocked = isLocked
-    if not state.battleCamRangeLockLocation then return end
-    if isLocked then
-        mem.write_uint16(state.battleCamRangeLockLocation, state.originalBattleRangeLockValues)
-    else
-        mem.write_uint16(state.battleCamRangeLockLocation, 0x9090)
-    end
-end
-
-local function getCameraTask()
-    if not state.cameraManagerGlobalPtr then return nil end
-    local manager = mem.read_uint32(state.cameraManagerGlobalPtr)
-    if not manager or manager == 0 then return nil end
-    local cameraTask = mem.read_uint32(manager + 0x50)
-    if not cameraTask or cameraTask == 0 then return nil end
-    return cameraTask
-end
-
-local function snapVerticalCameraOffset(offset)
-    local cameraTask = getCameraTask()
-    if not cameraTask then return nil end
-    local referenceY = mem.read_float(cameraTask + 0x54)
-    local cameraY = referenceY + offset
-    mem.write_float(cameraTask + 0x48, cameraY)
-    return cameraY, referenceY
+    core:setBattleRangeLock(isLocked)
 end
 
 local function applySettings()
@@ -158,153 +107,46 @@ local function applySettings()
     setBattleRangeLock(settings.battleRangeLocked)
 end
 
-local function initMemory()
-    if initialized then return true end
-
-    local minDistanceSig = native.find('minDistanceSig', 'D8C9D9C0D8C1D9C2D80D????????D9C3DCC0D8EB')
-    if not minDistanceSig then return false end
-    state.minDistancePtr = mem.read_uint32(minDistanceSig + 0x0A)
-    state.originalMinDistance = mem.read_float(state.minDistancePtr)
-    native.unprotect(state.minDistancePtr, 4)
-
-    local maxDistanceSig = native.find('maxDistanceSig', 'D9442410D825????????51D80D')
-    if not maxDistanceSig then return false end
-    state.maxDistancePtr = mem.read_uint32(maxDistanceSig + 0x06)
-    state.originalMaxDistance = mem.read_float(state.maxDistancePtr)
-    native.unprotect(state.maxDistancePtr, 4)
-
-    local minBattleDistanceSig = native.find('minBattleDistanceSig', '5152D8442424D905????????D8C1')
-    if not minBattleDistanceSig then return false end
-    state.minBattleDistancePtr = mem.read_uint32(minBattleDistanceSig + 0x08)
-    state.originalMinBattleDistance = mem.read_float(state.minBattleDistancePtr)
-    native.unprotect(state.minBattleDistancePtr, 4)
-
-    local maxBattleDistanceSig = native.find('maxBattleDistanceSig', 'D8C1D8CAD95C2450D805????????D8C9')
-    if not maxBattleDistanceSig then return false end
-    state.maxBattleDistancePtr = mem.read_uint32(maxBattleDistanceSig + 0x0A)
-    state.originalMaxBattleDistance = mem.read_float(state.maxBattleDistancePtr)
-    native.unprotect(state.maxBattleDistancePtr, 4)
-
-    state.zoomSetupSig = native.find('zoomSetupSig', '85C0741AD9442404D80D????????D80D????????D87C')
-    if state.zoomSetupSig then
-        state.originalMinDistancePtr = mem.read_uint32(state.zoomSetupSig + 0x10)
-        state.newMinDistanceConstant = native.alloc_float(state.originalMinDistance)
-        if state.newMinDistanceConstant then
-            mem.write_uint32(state.zoomSetupSig + 0x10, state.newMinDistanceConstant)
-        end
-    end
-
-    state.walkAnimationSig = native.find('walkAnimationSig', '0F85????????D80D????????D913D81D')
-    if state.walkAnimationSig and state.newMinDistanceConstant then
-        mem.write_uint32(state.walkAnimationSig + 0x08, state.newMinDistanceConstant)
-    end
-
-    state.npcWalkAnimationSig = native.find('npcWalkAnimationSig', '7514D9442410D80D????????D91B8B8E')
-    if state.npcWalkAnimationSig and state.newMinDistanceConstant then
-        mem.write_uint32(state.npcWalkAnimationSig + 0x08, state.newMinDistanceConstant)
-    end
-
-    state.battleSoundSig = native.find('battleSoundSig', 'D95C2414741B487410D9442410D80D')
-    if state.battleSoundSig and state.newMinDistanceConstant then
-        mem.write_uint32(state.battleSoundSig + 0x0F, state.newMinDistanceConstant)
-    end
-
-    local hPanSpeedSig = native.find('hPanSpeedSig', 'D84C24208B068BCED80D')
-    if hPanSpeedSig then
-        state.horizontalPanSpeedPtr = mem.read_uint32(hPanSpeedSig + 0x0A)
-        state.originalHorizontalPanSpeed = mem.read_float(state.horizontalPanSpeedPtr)
-        native.unprotect(state.horizontalPanSpeedPtr, 4)
-    end
-
-    local vPanSpeedSig = native.find('vPanSpeedSig', 'D84C24248B168BCED80D')
-    if vPanSpeedSig then
-        state.verticalPanSpeedPtr = mem.read_uint32(vPanSpeedSig + 0x0A)
-        state.originalVerticalPanSpeed = mem.read_float(state.verticalPanSpeedPtr)
-        native.unprotect(state.verticalPanSpeedPtr, 4)
-    end
-
-    state.jittersSig = native.find('jittersSig', '8D54242C8D44242CD8C9525550')
-    if state.jittersSig then
-        state.newJitterPtr = native.alloc_float(1.0)
-        state.originalJitterPtr = mem.read_uint32(state.jittersSig + 0x0F)
-        mem.write_uint32(state.jittersSig + 0x0F, state.newJitterPtr)
-        mem.write_uint32(state.jittersSig + 0x1F, state.newJitterPtr)
-    end
-
-    state.jittersPush1Sig = native.find('jittersPush1Sig', 'D8642410518D44242CD80D????????D91C24')
-    if state.jittersPush1Sig then
-        state.newJitterNegPtr = native.alloc_float(-1.0)
-        state.originalJitterPush1Ptr = mem.read_uint32(state.jittersPush1Sig + 0x0B)
-        mem.write_uint32(state.jittersPush1Sig + 0x0B, state.newJitterNegPtr)
-    end
-
-    state.battleCamRangeSig = native.find('battleCamRangeSig', 'D8C9D99C24DC000000DDD8D9442450D8442428D83D')
-    if state.battleCamRangeSig then
-        state.originalBattleCamRangePtr = mem.read_uint32(state.battleCamRangeSig + 0x15)
-        state.newBattleCamRangePtr = native.alloc_float(mem.read_float(state.originalBattleCamRangePtr))
-        mem.write_uint32(state.battleCamRangeSig + 0x15, state.newBattleCamRangePtr)
-        state.battleCamRangeLockLocation = state.battleCamRangeSig + 0x19
-        state.originalBattleRangeLockValues = mem.read_uint16(state.battleCamRangeLockLocation)
-    end
-
-    local cameraManagerSig = native.find('cameraManagerSig', 'A1????????0594020000C39090909090A1????????8B4050C3')
-    if cameraManagerSig then
-        state.cameraManagerGlobalPtr = mem.read_uint32(cameraManagerSig + 0x11)
-    end
-
-    initialized = true
-    applySettings()
-    return true
-end
-
-local function restorePointers()
-    if not initialized then return end
-
-    if state.minDistancePtr then mem.write_float(state.minDistancePtr, state.originalMinDistance) end
-    if state.maxDistancePtr then mem.write_float(state.maxDistancePtr, state.originalMaxDistance) end
-    if state.minBattleDistancePtr then mem.write_float(state.minBattleDistancePtr, state.originalMinBattleDistance) end
-    if state.maxBattleDistancePtr then mem.write_float(state.maxBattleDistancePtr, state.originalMaxBattleDistance) end
-    if state.horizontalPanSpeedPtr then mem.write_float(state.horizontalPanSpeedPtr, state.originalHorizontalPanSpeed) end
-    if state.verticalPanSpeedPtr then mem.write_float(state.verticalPanSpeedPtr, state.originalVerticalPanSpeed) end
-
-    if state.zoomSetupSig and state.originalMinDistancePtr then mem.write_uint32(state.zoomSetupSig + 0x10, state.originalMinDistancePtr) end
-    if state.walkAnimationSig and state.originalMinDistancePtr then mem.write_uint32(state.walkAnimationSig + 0x08, state.originalMinDistancePtr) end
-    if state.npcWalkAnimationSig and state.originalMinDistancePtr then mem.write_uint32(state.npcWalkAnimationSig + 0x08, state.originalMinDistancePtr) end
-    if state.battleSoundSig and state.originalMinDistancePtr then mem.write_uint32(state.battleSoundSig + 0x0F, state.originalMinDistancePtr) end
-
-    if state.jittersSig and state.originalJitterPtr then
-        mem.write_uint32(state.jittersSig + 0x0F, state.originalJitterPtr)
-        mem.write_uint32(state.jittersSig + 0x1F, state.originalJitterPtr)
-    end
-    if state.jittersPush1Sig and state.originalJitterPush1Ptr then
-        mem.write_uint32(state.jittersPush1Sig + 0x0B, state.originalJitterPush1Ptr)
-    end
-    if state.battleCamRangeSig and state.originalBattleCamRangePtr then
-        mem.write_uint32(state.battleCamRangeSig + 0x15, state.originalBattleCamRangePtr)
-    end
-    if state.battleCamRangeLockLocation and state.originalBattleRangeLockValues then
-        mem.write_uint16(state.battleCamRangeLockLocation, state.originalBattleRangeLockValues)
-    end
-
-    if state.newMinDistanceConstant then mem.dealloc(state.newMinDistanceConstant) end
-    if state.newJitterPtr then mem.dealloc(state.newJitterPtr) end
-    if state.newJitterNegPtr then mem.dealloc(state.newJitterNegPtr) end
-    if state.newBattleCamRangePtr then mem.dealloc(state.newBattleCamRangePtr) end
-
-    initialized = false
-end
-
 windower.register_event('load', function()
-    if initMemory() then
+    if core:install() then
         native.chat(207, 'loaded. Try //camera status')
     else
-        native.chat(167, 'failed to initialize; one or more required signatures were not found')
+        local off = {}
+        for _, g in ipairs(core:groupStatus()) do
+            if g.required and not g.enabled then off[#off + 1] = g.name end
+        end
+        native.chat(167, 'not every patch group is in (' .. table.concat(off, ', ') .. '); see //camera status')
     end
+    applySettings()
 end)
+
+-- Inside a re-check window the core re-applies patches another tool reverted and reports
+-- takeovers, once a second. Windows open for a minute at install and the first time the
+-- character enters the world after that, and for a few seconds when the user loads or
+-- unloads another addon or plugin. Later zones open nothing.
+windower.register_event('prerender', function()
+    core:recheck()
+end)
+
+windower.register_event('login', 'zone change', function()
+    core:onEnterWorld()
+end)
+
+-- Best effort: Windower 4 has no load/unload notification for other addons, so watch the
+-- console commands the user types. `//lua load|unload|reload`, `//load`, `//unload`.
+local function watchToolChange(text)
+    if type(text) ~= 'string' then return end
+    local t = text:lower()
+    if t:match('^//lua%s+[lu]n?l?o?a?d') or t:match('^//lua%s+r') or t:match('^//load%s') or t:match('^//unload%s') then
+        core:beginRecheckWindow(Core.RECHECK_AFTER_TOOL_CHANGE)
+    end
+end
+windower.register_event('outgoing text', function(original) watchToolChange(original) end)
+windower.register_event('unhandled command', function(...) watchToolChange('//' .. table.concat({...}, ' ')) end)
 
 windower.register_event('unload', function()
     config.save(settings)
-    restorePointers()
+    core:uninstall()
 end)
 
 local function require_number(args, syntax)
@@ -360,7 +202,7 @@ windower.register_event('addon command', function(command, ...)
     elseif table.contains(T{'vheight', 'vh', 'snapheight', 'sh'}, command) then
         local value = require_number(args, '//camera vheight <offset>')
         if not value then return end
-        local cameraY, referenceY = snapVerticalCameraOffset(value)
+        local cameraY, referenceY = core:snapHeight(value)
         if cameraY then
             native.chat(8, string.format('snapped camera height to %.2f (reference %.2f + %.2f)', cameraY, referenceY, value))
         else
@@ -401,20 +243,24 @@ windower.register_event('addon command', function(command, ...)
         end
     elseif table.contains(T{'status', 's'}, command) then
         native.chat(127, '- status')
-        native.chat(127, '-  initialized: ' .. tostring(initialized))
+        native.chat(127, '-  active: ' .. tostring(core:active()))
         native.chat(127, '-  cameraDistance: ' .. tostring(settings.cameraDistance))
         native.chat(127, '-  battleDistance: ' .. tostring(settings.battleDistance))
         native.chat(127, '-  horizontalPanSpeed: ' .. tostring(settings.horizontalPanSpeed))
         native.chat(127, '-  verticalPanSpeed: ' .. tostring(settings.verticalPanSpeed))
-        local cameraTask = getCameraTask()
-        if cameraTask then
-            native.chat(127, string.format('-  cameraY: %.2f', mem.read_float(cameraTask + 0x48)))
-            native.chat(127, string.format('-  referenceY: %.2f', mem.read_float(cameraTask + 0x54)))
+        local cameraY, referenceY = core:cameraHeights()
+        if cameraY then
+            native.chat(127, string.format('-  cameraY: %.2f', cameraY))
+            native.chat(127, string.format('-  referenceY: %.2f', referenceY))
         end
         native.chat(127, '-  battleRange: ' .. tostring(settings.battleRange))
         native.chat(127, '-  battleRangeLocked: ' .. tostring(settings.battleRangeLocked))
         native.chat(127, '-  saveOnIncrement: ' .. tostring(settings.saveOnIncrement))
         native.chat(127, '-  autoCalcVertSpeed: ' .. tostring(settings.autoCalcVertSpeed))
+        for _, site in ipairs(core:status()) do
+            if site.state ~= 'patched' then
+                native.chat(127, string.format('-  %s: %s%s', site.name, site.state, site.note and (' (' .. site.note .. ')') or ''))
+            end
+        end
     end
 end)
-
